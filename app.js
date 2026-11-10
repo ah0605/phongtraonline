@@ -1134,7 +1134,9 @@
       delete P[s.key];
       cnt();
     });
-    db.ref('chat').limitToLast(25).on('child_added', s => addLog(s.val()));
+    db.ref('chat').orderByChild('t').startAt(Date.now() + off - CHAT_TTL).limitToLast(25)
+      .on('child_added', s => addLog(s.val()));
+    setInterval(pruneChat, 15000);
     db.ref('tracks').orderByChild('ord').on('value', s => {
       tracks = [];
       s.forEach(x => {
@@ -1178,6 +1180,22 @@
     AE.door();
     requestAnimationFrame(loop);
   }
+  // Chat quá 5 phút thì xóa khỏi màn hình và khỏi Firebase
+  const CHAT_TTL = 5 * 60 * 1000;
+  function pruneChat() {
+    const cut = Date.now() + off - CHAT_TTL;
+    const l = $('log');
+    [...l.children].forEach(d => {
+      if (+d.dataset.t < cut) {
+        l.removeChild(d);
+      }
+    });
+    db.ref('chat').orderByChild('t').endAt(cut).limitToFirst(50).once('value').then(s => {
+      s.forEach(x => {
+        x.ref.remove().catch(() => {});
+      });
+    }).catch(() => {});
+  }
   function addLog(m) {
     if (m.s && (!chatReady || m.u === uid)) {
       return;
@@ -1201,6 +1219,7 @@
       d.appendChild(b);
       d.appendChild(document.createTextNode(m.m));
     }
+    d.dataset.t = m.t || (Date.now() + off);
     const l = $('log');
     l.appendChild(d);
     while (l.children.length > 40) {

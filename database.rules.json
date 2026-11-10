@@ -57,7 +57,7 @@
         "t"
       ],
       "$k": {
-        ".write": "auth != null && !data.exists()",
+        ".write": "auth != null && (!data.exists() || (!newData.exists() && data.child('t').val() < now - 300000))",
         ".validate": "newData.hasChildren(['m','t'])",
         "m": {
           ".validate": "newData.isString() && newData.val().length <= 140"
