@@ -587,9 +587,9 @@
         o.start(t);
         o.stop(t + .25);
       },
-      clap(n, v) {
-        // art === null nghĩa là đang có bài hát: không phát tiếng vỗ tay để khỏi lấn át giọng hát
-        if (!c || !art) {
+      clap(n, v, force) {
+        // art === null nghĩa là đang có bài hát: chỉ vỗ tay lúc mở/kết thúc bài (force), người chơi bấm vỗ tay thì im
+        if (!c || (!art && !force)) {
           return;
         }
         v = v == null ? 1 : v;
@@ -805,6 +805,20 @@
   let isAdmin = false;
   let tracks = [];
   let now = null;
+  // Danh sách phát theo chủ đề. Muốn thêm chủ đề mới, thêm một dòng [mã-không-dấu, 'tên hiển thị'].
+  const THEMES = [
+    ['chung', '🎵 Tất cả bài hát'],
+    ['tru-tinh', '🌹 Trữ tình'],
+    ['dan-ca', '🎶 Dân ca & hò'],
+    ['nhac-tre', '🎸 Nhạc trẻ'],
+    ['khong-loi', '🎹 Không lời thư giãn'],
+    ['song-ca', '👫 Song ca']
+  ];
+  const themeOk = k => THEMES.some(t => t[0] === k);
+  let room = themeOk(localStorage.tp_pl) ? localStorage.tp_pl : 'chung';
+  const PR = {};
+  let over = null;
+  let overRef = null;
   let rank = [];
   let cur = '';
   let score = +localStorage.tp_score || 0;
@@ -855,8 +869,8 @@
     $('score').textContent = '⭐ Cấp ' + lvl(score) + ' · 🍃 ' + score + '/' + lvNext(score) + ' điểm · ' + lvn(score);
   };
   const cnt = () => {
-    const n = Object.keys(P).length + 1;
-    $('cnt').textContent = '● ' + n + '/' + MAX;
+    const n = Math.max(Object.keys(PR).length, Object.keys(P).length + 1);
+    $('cnt').textContent = '● ' + n + '/' + MAX + ' · 🎧 ' + (Object.keys(P).length + 1);
     $('cnt').style.color = n >= MAX ? '#ff9a7a' : n >= MAX * .85 ? '#f0c060' : '#7fe08a';
   };
   let acct = false;
@@ -1049,6 +1063,22 @@
       alert('Không kết nối được máy chủ: ' + e.message);
     }
   };
+  function syncPlayer(k, first) {
+    const v = PR[k];
+    if (!v) {
+      rm(P[k]);
+      delete P[k];
+      cnt();
+    }
+    else if ((v.pl || 'chung') === room) {
+      applyP(k, v, first || !P[k]);
+    }
+    else if (P[k]) {
+      rm(P[k]);
+      delete P[k];
+      cnt();
+    }
+  }
   function applyP(k, v, first) {
     const p = P[k] || (P[k] = {
       x: v.x, y: v.y, la: 0
@@ -1093,7 +1123,7 @@
     myRef = db.ref('players/' + uid);
     myRef.onDisconnect().remove();
     myRef.set({
-      n: me.n, av: me.av, c: me.c, x: Math.round(me.x), y: me.y, d: -1, s: score, r: acct ? 1 : 0, z: me.z
+      n: me.n, av: me.av, c: me.c, x: Math.round(me.x), y: me.y, d: -1, s: score, r: acct ? 1 : 0, z: me.z, pl: room
     })
       .then(() => db.ref('players').once('value'))
       .then(s => {
@@ -1129,23 +1159,24 @@
     });
     const pr = db.ref('players');
     pr.on('child_added', s => {
+      PR[s.key] = s.val();
       if (s.key !== uid) {
-        applyP(s.key, s.val(), true);
-        if (chatReady && FR.list[s.key]) {
+        syncPlayer(s.key, true);
+        if (chatReady && P[s.key] && FR.list[s.key]) {
           toast('💛 Bạn bè ' + (s.val().n || '') + ' vừa vào phòng trà');
           fRefresh();
         }
       }
     });
     pr.on('child_changed', s => {
+      PR[s.key] = s.val();
       if (s.key !== uid) {
-        applyP(s.key, s.val(), false);
+        syncPlayer(s.key, false);
       }
     });
     pr.on('child_removed', s => {
-      rm(P[s.key]);
-      delete P[s.key];
-      cnt();
+      delete PR[s.key];
+      syncPlayer(s.key, false);
     });
     db.ref('chat').orderByChild('t').startAt(Date.now() + off - CHAT_TTL).limitToLast(25)
       .on('child_added', s => addLog(s.val()));
@@ -1155,22 +1186,20 @@
       s.forEach(x => {
         tracks.push(Object.assign({ id: x.key }, x.val()));
       });
-      syncAudio();
+      recomputeNow();
       if (cur === 'lineup') {
         HD.lineup();
       }
     });
-    db.ref('stage/now').on('value', s => {
-      now = s.val();
-      syncAudio();
-    });
+    watchOver();
+    setInterval(recomputeNow, 500);
     db.ref('scores').orderByChild('s').limitToLast(10).on('value', s => {
       rank = [];
       s.forEach(x => {
         rank.unshift(x.val());
       });
     });
-    db.ref('chat').push({
+    chatPush({
       n: '', m: me.n + ' vào phòng trà 🏮', s: 1, u: uid, t: TS()
     });
     ckBadge();
@@ -1195,6 +1224,7 @@
   }
   // Chat quá 5 phút thì xóa khỏi màn hình và khỏi Firebase
   const CHAT_TTL = 5 * 60 * 1000;
+  const chatPush = o => db.ref('chat').push(Object.assign({ r: room }, o));
   function pruneChat() {
     const cut = Date.now() + off - CHAT_TTL;
     const l = $('log');
@@ -1210,6 +1240,9 @@
     }).catch(() => {});
   }
   function addLog(m) {
+    if ((m.r || 'chung') !== room) {
+      return;
+    }
     if (m.s && (!chatReady || m.u === uid)) {
       return;
     }
@@ -1240,8 +1273,108 @@
     }
     l.scrollTop = l.scrollHeight;
   }
+  const INTRO_MS = 9000;
+  const OUTRO_MS = 3000;
+  const roomTracks = k => tracks.filter(t => (k === 'chung' || t.list === k) && +t.dur > 0);
+  // Lịch phát tính từ giờ máy chủ nên ai cùng danh sách phát đều nghe cùng một bài, cùng một đoạn, không cần admin online
+  function scheduled(k, sn) {
+    const L = roomTracks(k);
+    if (!L.length) {
+      return null;
+    }
+    const slot = t => INTRO_MS + Math.round(t.dur * 1000) + OUTRO_MS;
+    const total = L.reduce((a, t) => a + slot(t), 0);
+    let m = Math.floor(sn) % total;
+    for (const t of L) {
+      const sl = slot(t);
+      if (m < sl) {
+        return { trackId: t.id, startedAt: Math.floor(sn) - m + INTRO_MS };
+      }
+      m -= sl;
+    }
+    return null;
+  }
+  function recomputeNow() {
+    const sn = Date.now() + off;
+    let n = null;
+    if (over) {
+      const t = tracks.find(x => x.id === over.trackId);
+      if (t && sn < over.startedAt + Math.round((t.dur || 0) * 1000) + OUTRO_MS) {
+        n = over;
+      }
+    }
+    if (!n) {
+      n = scheduled(room, sn);
+    }
+    const ch = !n !== !now || (n && now && (n.trackId !== now.trackId || n.startedAt !== now.startedAt));
+    now = n;
+    if (ch) {
+      syncAudio();
+      if (cur === 'lineup') {
+        HD.lineup();
+      }
+    }
+  }
+  function watchOver() {
+    if (overRef) {
+      overRef.off();
+    }
+    over = null;
+    overRef = db.ref('stage/' + room + '/now');
+    overRef.on('value', s => {
+      over = s.val();
+      recomputeNow();
+    });
+  }
+  let introFor = 0;
+  let seekT = 0;
+  function announce(tr) {
+    let e = $('intro');
+    if (!e) {
+      e = document.createElement('div');
+      e.id = 'intro';
+      e.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:60;'
+        + 'background:#0b1530ee;border:1px solid #c9a227;border-radius:14px;padding:10px 18px;'
+        + 'text-align:center;color:#f0c060;pointer-events:none;max-width:90vw;transition:opacity .6s';
+      document.body.appendChild(e);
+    }
+    e.textContent = '';
+    const a = document.createElement('div');
+    a.textContent = '🎤 Xin mời thưởng thức';
+    const b = document.createElement('b');
+    b.style.fontSize = '18px';
+    b.textContent = '♪ ' + tr.title;
+    const c2 = document.createElement('div');
+    c2.textContent = tr.g === 'd' ? 'Song ca: ' + tr.artist : 'Ca sĩ: ' + tr.artist;
+    e.append(a, b, c2);
+    e.style.opacity = '1';
+    e.hidden = false;
+    clearTimeout(announce._t);
+    announce._t = setTimeout(() => {
+      e.style.opacity = '0';
+    }, INTRO_MS - 800);
+    try {
+      const ss = window.speechSynthesis;
+      if (ss && window.SpeechSynthesisUtterance) {
+        ss.cancel();
+        const u = new SpeechSynthesisUtterance('Xin mời quý vị thưởng thức ca khúc ' + tr.title
+          + (tr.g === 'd' ? ', song ca ' : ', do ca sĩ ') + tr.artist + (tr.g === 'd' ? '.' : ' trình bày.'));
+        u.lang = 'vi-VN';
+        u.rate = .95;
+        const v = ss.getVoices().find(x => /^vi/i.test(x.lang));
+        if (v) {
+          u.voice = v;
+        }
+        setTimeout(() => ss.speak(u), 1800);
+      }
+    }
+    catch (err) {
+      // trình duyệt không hỗ trợ đọc giọng nói thì chỉ hiện chữ
+    }
+  }
   function syncAudio() {
     const tr = tracks.find(t => now && t.id === now.trackId);
+    clearTimeout(seekT);
     if (!tr) {
       au.pause();
       au.removeAttribute('src');
@@ -1250,30 +1383,34 @@
       return;
     }
     AE.setArtist(null);
+    const st = now.startedAt;
     if (au.dataset.id !== tr.id) {
       au.dataset.id = tr.id;
       au.src = tr.url;
-      if (chatReady) {
-        AE.clap(Object.keys(P).length + 1);
+    }
+    if (Date.now() + off < st) {
+      au.pause();
+      if (introFor !== st) {
+        introFor = st;
+        AE.clap(Object.keys(P).length + 1, 1, true);
+        announce(tr);
       }
     }
     const seek = () => {
+      const o = (Date.now() + off - st) / 1000;
+      if (o < 0) {
+        seekT = setTimeout(seek, -o * 1000 + 20);
+        return;
+      }
       const d = au.duration || tr.dur || 0;
-      let o = (Date.now() + off - now.startedAt) / 1000;
-      if (d) {
-        o %= d;
+      if (d && o >= d) {
+        return;
       }
       au.currentTime = Math.max(0, o);
       au.play().catch(() => toast('Chạm vào màn hình để bật nhạc'));
     };
     au.onended = () => {
-      if (isAdmin) {
-        const i = tracks.findIndex(t => t.id === tr.id);
-        HD.play(tracks[(i + 1) % tracks.length].id);
-      }
-      else {
-        seek();
-      }
+      AE.clap(Object.keys(P).length + 1, 1, true);
     };
     if (au.readyState > 0) {
       seek();
@@ -1419,7 +1556,7 @@
       return;
     }
     lastChat = Date.now();
-    db.ref('chat').push({
+    chatPush({
       n: me.n, m: m.slice(0, 140), t: TS()
     });
     mission('chat');
@@ -1572,6 +1709,49 @@
   }
   const HD = {
     sit: () => sitToggle(),
+    theme(id) {
+      const t = tracks.find(x => x.id === id);
+      if (t) {
+        const ks = THEMES.slice(1).map(x => x[0]);
+        db.ref('tracks/' + id + '/list').set(ks[(ks.indexOf(t.list) + 1) % ks.length]);
+      }
+    },
+    plist() {
+      const num = k => Object.values(PR).filter(v => (v.pl || 'chung') === k).length;
+      panel('<h3>🎧 Danh sách phát</h3><p class="sm">Chọn chủ đề nhạc. Những người cùng chọn một danh sách sẽ thấy nhau, '
+        + 'trò chuyện và nghe chung. Nhạc tự phát, không cần chờ admin.</p>'
+        + THEMES.map(x => '<div class="row"><button data-a="room" data-v="' + x[0] + '"'
+          + (x[0] === room ? ' style="border-color:#7fe08a"' : '') + '>' + (x[0] === room ? '✔ ' : '') + x[1]
+          + '<span class="sm"> · ' + roomTracks(x[0]).length + ' bài · ' + num(x[0]) + ' người</span></button></div>').join(''),
+      'plist');
+    },
+    room(k) {
+      if (!themeOk(k) || k === room) {
+        return HD.close();
+      }
+      room = k;
+      localStorage.tp_pl = k;
+      myRef.update({ pl: k });
+      $('log').textContent = '';
+      Object.keys(P).forEach(x => {
+        rm(P[x]);
+        delete P[x];
+      });
+      Object.keys(PR).forEach(x => {
+        if (x !== uid) {
+          syncPlayer(x, true);
+        }
+      });
+      cnt();
+      watchOver();
+      now = null;
+      recomputeNow();
+      if (!now) {
+        syncAudio();
+      }
+      HD.close();
+      toast('🎧 Bạn đã vào danh sách phát: ' + THEMES.find(x => x[0] === k)[1]);
+    },
     pwt(id) {
       const i = $(id);
       const show = i.type === 'password';
@@ -1589,7 +1769,7 @@
     req() {
       const t = (prompt('Bạn muốn nghe bài gì?') || '').trim().slice(0, 100);
       if (t) {
-        db.ref('chat').push({
+        chatPush({
           n: '', m: '🎶 ' + me.n + ' yêu cầu: ' + t, s: 1, t: TS()
         });
         toast('Đã gửi yêu cầu cho ca sĩ');
@@ -1626,13 +1806,16 @@
       toast('Đã châm thêm nước nóng ♨️');
     },
     lineup() {
+      const shown = tracks.filter(t => room === 'chung' || t.list === room);
       let h = '<h3>🗓 Bảng lịch diễn</h3>'
-        + (tracks.length
-          ? tracks.map(
+        + '<p class="sm">Danh sách phát: <b>' + esc(THEMES.find(x => x[0] === room)[1])
+        + '</b></p><div class="row"><button data-a="plist">🎧 Đổi danh sách phát</button></div>'
+        + (shown.length
+          ? shown.map(
             t => (`<div class="row"><button data-a="play" data-v="${esc(t.id)}" ${isAdmin ? '' : 'disabled'}>` +
               `${now && now.trackId === t.id ? '▶ ' : ''}${t.g === 'f' ? '👩‍🎤' : t.g === 'd' ? '👫' : '🧑‍🎤'} ` +
               `${esc(t.title)} — ${esc(t.artist)}</button>` +
-              `${isAdmin ? `<button data-a="flip" data-v="${esc(t.id)}" title="Đổi ca sĩ nam/nữ">⚥</button><button data-a="del" data-v="${esc(t.id)}">🗑</button>` : ''}</div>`)
+              `${isAdmin ? `<button data-a="flip" data-v="${esc(t.id)}" title="Đổi ca sĩ nam/nữ">⚥</button><button data-a="theme" data-v="${esc(t.id)}" title="Đổi chủ đề">🏷</button><button data-a="del" data-v="${esc(t.id)}">🗑</button>` : ''}</div>`)
           ).join(
             ''
           )
@@ -1643,7 +1826,10 @@
           ('music/ten-file.mp3 hoặc link mp3"><br><br>' +
             '<select id="sg" style="width:100%;padding:8px;border-radius:8px;background:#2a170c;color:inherit">') +
           '<option value="m">Ca sĩ nam (mặc vest)</option><option value="f">' +
-          'Ca sĩ nữ (mặc áo dài)</option><option value="d">Song ca (nam + nữ)</option></select><br><br><button data-a="add" style="width:100%">' +
+          'Ca sĩ nữ (mặc áo dài)</option><option value="d">Song ca (nam + nữ)</option></select><br><br>' +
+          '<select id="sl" style="width:100%;padding:8px;border-radius:8px;background:#2a170c;color:inherit">' +
+          THEMES.slice(1).map(x => '<option value="' + x[0] + '">Chủ đề: ' + esc(x[1]) + '</option>').join('') +
+          '</select><br><br><button data-a="add" style="width:100%">' +
           'Thêm vào lịch diễn</button><br><br><button data-a="alogout">' +
           'Đăng xuất admin</button>')
         : ('<p class="sm">Chỉ admin mới thêm và chuyển bài.</p>' +
@@ -1654,7 +1840,7 @@
       panel(h, 'lineup');
     },
     play(id) {
-      db.ref('stage/now').set({ trackId: id, startedAt: TS() }).catch(
+      db.ref('stage/' + room + '/now').set({ trackId: id, startedAt: Date.now() + off + INTRO_MS }).catch(
         () => toast('Bạn không có quyền admin')
       );
     },
@@ -1683,6 +1869,7 @@
         url,
         dur,
         g: $('sg').value,
+        list: $('sl').value,
         ord: Date.now()
       }).then(() => toast('Đã thêm bài ✅'));
       a.onloadedmetadata = () => save(a.duration || 0).then(() => {
@@ -1916,7 +2103,7 @@
       if (!p) {
         return;
       }
-      db.ref('chat').push({
+      chatPush({
         n: '', m: '👋 ' + me.n + ' chào ' + p.n + ', mình làm quen nhé!', s: 1, u: uid, t: TS()
       });
       doAct('👋', 0);
@@ -2086,7 +2273,7 @@
         localStorage.tp_gd = JSON.stringify(d);
         addScore(2, true);
         toast('🎁 Đã tặng ' + g[0] + ' cho ' + fName(k));
-        db.ref('chat').push({
+        chatPush({
           n: '', m: '🎁 ' + me.n + ' tặng ' + fName(k) + ' ' + g[0] + ' ' + g[1], s: 1, u: uid, t: TS()
         });
         const p = P[k];
