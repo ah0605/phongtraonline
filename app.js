@@ -1274,6 +1274,8 @@
     l.scrollTop = l.scrollHeight;
   }
   const INTRO_MS = 9000;
+  // g: m nam, f nữ, d song ca nam-nữ, dm song ca nam-nam, df song ca nữ-nữ
+  const isDuet = g => g === 'd' || g === 'dm' || g === 'df';
   const OUTRO_MS = 3000;
   const roomTracks = k => tracks.filter(t => (k === 'chung' || t.list === k) && +t.dur > 0);
   // Lịch phát tính từ giờ máy chủ nên ai cùng danh sách phát đều nghe cùng một bài, cùng một đoạn, không cần admin online
@@ -1345,7 +1347,7 @@
     b.style.fontSize = '18px';
     b.textContent = '♪ ' + tr.title;
     const c2 = document.createElement('div');
-    c2.textContent = tr.g === 'd' ? 'Song ca: ' + tr.artist : 'Ca sĩ: ' + tr.artist;
+    c2.textContent = isDuet(tr.g) ? 'Song ca: ' + tr.artist : 'Ca sĩ: ' + tr.artist;
     e.append(a, b, c2);
     e.style.opacity = '1';
     e.hidden = false;
@@ -1358,7 +1360,7 @@
       if (ss && window.SpeechSynthesisUtterance) {
         ss.cancel();
         const u = new SpeechSynthesisUtterance('Xin mời quý vị thưởng thức ca khúc ' + tr.title
-          + (tr.g === 'd' ? ', song ca ' : ', do ca sĩ ') + tr.artist + (tr.g === 'd' ? '.' : ' trình bày.'));
+          + (isDuet(tr.g) ? ', song ca ' : ', do ca sĩ ') + tr.artist + (isDuet(tr.g) ? '.' : ' trình bày.'));
         u.lang = 'vi-VN';
         u.rate = .95;
         const v = ss.getVoices().find(x => /^vi/i.test(x.lang));
@@ -1813,7 +1815,7 @@
         + (shown.length
           ? shown.map(
             t => (`<div class="row"><button data-a="play" data-v="${esc(t.id)}" ${isAdmin ? '' : 'disabled'}>` +
-              `${now && now.trackId === t.id ? '▶ ' : ''}${t.g === 'f' ? '👩‍🎤' : t.g === 'd' ? '👫' : '🧑‍🎤'} ` +
+              `${now && now.trackId === t.id ? '▶ ' : ''}${t.g === 'f' ? '👩‍🎤' : t.g === 'd' ? '👫' : t.g === 'dm' ? '👬' : t.g === 'df' ? '👭' : '🧑‍🎤'} ` +
               `${esc(t.title)} — ${esc(t.artist)}</button>` +
               `${isAdmin ? `<button data-a="flip" data-v="${esc(t.id)}" title="Đổi ca sĩ nam/nữ">⚥</button><button data-a="theme" data-v="${esc(t.id)}" title="Đổi chủ đề">🏷</button><button data-a="del" data-v="${esc(t.id)}">🗑</button>` : ''}</div>`)
           ).join(
@@ -1826,7 +1828,8 @@
           ('music/ten-file.mp3 hoặc link mp3"><br><br>' +
             '<select id="sg" style="width:100%;padding:8px;border-radius:8px;background:#2a170c;color:inherit">') +
           '<option value="m">Ca sĩ nam (mặc vest)</option><option value="f">' +
-          'Ca sĩ nữ (mặc áo dài)</option><option value="d">Song ca (nam + nữ)</option></select><br><br>' +
+          'Ca sĩ nữ (mặc áo dài)</option><option value="d">Song ca nam + nữ</option>' +
+          '<option value="dm">Song ca nam + nam</option><option value="df">Song ca nữ + nữ</option></select><br><br>' +
           '<select id="sl" style="width:100%;padding:8px;border-radius:8px;background:#2a170c;color:inherit">' +
           THEMES.slice(1).map(x => '<option value="' + x[0] + '">Chủ đề: ' + esc(x[1]) + '</option>').join('') +
           '</select><br><br><button data-a="add" style="width:100%">' +
@@ -1850,7 +1853,7 @@
     flip(id) {
       const t = tracks.find(x => x.id === id);
       if (t) {
-        db.ref('tracks/' + id + '/g').set(t.g === 'f' ? 'd' : t.g === 'd' ? 'm' : 'f');
+        db.ref('tracks/' + id + '/g').set({ m: 'f', f: 'd', d: 'dm', dm: 'df', df: 'm' }[t.g || 'm'] || 'm');
       }
     },
     add() {
@@ -6231,17 +6234,18 @@
         }
       });
       sFig2 = null;
-      const duet = !!tr && tr.g === 'd';
-      const fem = !!tr && tr.g === 'f';
+      const duet = !!tr && isDuet(tr.g);
+      const fem = !!tr && (tr.g === 'f' || tr.g === 'df');
       sFig = person(fem ? 'f' : 'm', fem ? 0x14305a : 0x15151a, true, 0, 0);
       sFig.g.position.set(duet ? -1.15 : 0, .58, STZ + .2);
       scn.add(sFig.g);
       singerGLB(sFig, fem);
       if (duet) {
-        sFig2 = person('f', 0x14305a, true, 0, 0);
+        const fem2 = tr.g === 'd' || tr.g === 'df';
+        sFig2 = person(fem2 ? 'f' : 'm', fem2 ? 0x14305a : 0x15151a, true, 1, 1);
         sFig2.g.position.set(1.15, .58, STZ + .2);
         scn.add(sFig2.g);
-        singerGLB(sFig2, true);
+        singerGLB(sFig2, fem2);
       }
     }
     singer.visible = !!tr;
