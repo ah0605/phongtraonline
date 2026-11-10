@@ -1528,9 +1528,8 @@
     if (o.j) {
       joy = null;
       jy.hidden = true;
-      return;
     }
-    if (o.mv < 8 && performance.now() - o.t < 400) {
+    if (o.mv < 12 && performance.now() - o.t < 450) {
       clickAt(e.clientX, e.clientY);
     }
   };
@@ -1559,6 +1558,7 @@
     $('pn').hidden = false;
   }
   const HD = {
+    sit: () => sitToggle(),
     pwt(id) {
       const i = $(id);
       const show = i.type === 'password';
@@ -6311,23 +6311,41 @@
         return HD.menu();
       }
     }
+    const reach = COARSE ? 70 : 52;
+    const near = SEATS.map(sd => {
+      const q = pj(X3(sd.x), .55, Z3(sd.y));
+      return { sd, d: Math.hypot(cx - q[0], cy - q[1]) };
+    }).filter(v => v.d < reach).sort((u, v) => u.d - v.d);
+    if (near.length) {
+      const free = near.find(v => !taken(v.sd) && !vipLocked(v.sd));
+      if (free) {
+        AE.seat();
+        return goto(free.sd.x, free.sd.y);
+      }
+      if (near[0].d < 36) {
+        return toast(vipLocked(near[0].sd)
+          ? '🛋 Sofa VIP sát sân khấu dành cho Cấp 5 trở lên'
+          : 'Chỗ này có người ngồi rồi');
+      }
+    }
     if (!rc.ray.intersectPlane(pl, hit)) {
       return;
     }
-    const x = Math.round(hit.x * 40 + W / 2);
-    const y = Math.round(hit.z * 40 + H / 2);
-    const s = nearSeat(x, y);
-    if (s) {
-      if (s.sh === .58 && lvl(score) < 5 && !amAdmin) {
-        return toast('🛋 Sofa VIP sát sân khấu dành cho Cấp 5 trở lên');
-      }
-      if (taken(s)) {
-        return toast('Chỗ này có người ngồi rồi');
-      }
-      AE.seat();
-      return goto(s.x, s.y);
+    goto(Math.round(hit.x * 40 + W / 2), Math.round(hit.z * 40 + H / 2));
+  }
+  const vipLocked = sd => sd.sh === .58 && lvl(score) < 5 && !amAdmin;
+  function sitToggle() {
+    const cur0 = SEATS.find(sd => Math.hypot(sd.x - me.x, sd.y - me.y) < 48);
+    if (cur0) {
+      return goto(cur0.stool ? cur0.x + 80 : cur0.x, cur0.stool ? cur0.y : cur0.y + 80);
     }
-    goto(x, y);
+    const c = SEATS.filter(sd => !taken(sd) && !vipLocked(sd))
+      .sort((u, v) => Math.hypot(u.x - me.x, u.y - me.y) - Math.hypot(v.x - me.x, v.y - me.y))[0];
+    if (!c) {
+      return toast('Hiện chưa còn chỗ trống phù hợp');
+    }
+    AE.seat();
+    goto(c.x, c.y);
   }
   function moveDir(r, f) {
     const dx = -Math.sin(camYaw) * f + Math.cos(camYaw) * r;
