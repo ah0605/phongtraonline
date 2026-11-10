@@ -431,7 +431,7 @@
       gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
       o.connect(fl);
       fl.connect(gn);
-      gn.connect(g.music);
+      gn.connect(g.pno || g.music);
       o.start(t);
       o.stop(t + dur + .1);
     };
@@ -484,6 +484,9 @@
         fb.gain.value = .32;
         const wet = c.createGain();
         wet.gain.value = .28;
+        g.pno = c.createGain();
+        g.pno.connect(g.music);
+        g.wet = wet;
         g.music.connect(dl);
         dl.connect(fb);
         fb.connect(dl);
@@ -535,6 +538,15 @@
         step = 0;
         if (c) {
           nextT = c.currentTime + .15;
+          const t = c.currentTime;
+          // Có bài phát: tắt hẳn tiếng piano (cả nốt đã lên lịch và đuôi vang)
+          [[g.pno, 1], [g.wet, .28]].forEach(x => {
+            if (x[0]) {
+              x[0].gain.cancelScheduledValues(t);
+              x[0].gain.setValueAtTime(x[0].gain.value, t);
+              x[0].gain.linearRampToValueAtTime(a ? x[1] : 0, t + (a ? .6 : .05));
+            }
+          });
         }
       },
       dv(v) {
@@ -576,7 +588,8 @@
         o.stop(t + .25);
       },
       clap(n, v) {
-        if (!c) {
+        // art === null nghĩa là đang có bài hát: không phát tiếng vỗ tay để khỏi lấn át giọng hát
+        if (!c || !art) {
           return;
         }
         v = v == null ? 1 : v;
@@ -1617,7 +1630,7 @@
         + (tracks.length
           ? tracks.map(
             t => (`<div class="row"><button data-a="play" data-v="${esc(t.id)}" ${isAdmin ? '' : 'disabled'}>` +
-              `${now && now.trackId === t.id ? '▶ ' : ''}${t.g === 'f' ? '👩‍🎤' : '🧑‍🎤'} ` +
+              `${now && now.trackId === t.id ? '▶ ' : ''}${t.g === 'f' ? '👩‍🎤' : t.g === 'd' ? '👫' : '🧑‍🎤'} ` +
               `${esc(t.title)} — ${esc(t.artist)}</button>` +
               `${isAdmin ? `<button data-a="flip" data-v="${esc(t.id)}" title="Đổi ca sĩ nam/nữ">⚥</button><button data-a="del" data-v="${esc(t.id)}">🗑</button>` : ''}</div>`)
           ).join(
@@ -1630,7 +1643,7 @@
           ('music/ten-file.mp3 hoặc link mp3"><br><br>' +
             '<select id="sg" style="width:100%;padding:8px;border-radius:8px;background:#2a170c;color:inherit">') +
           '<option value="m">Ca sĩ nam (mặc vest)</option><option value="f">' +
-          'Ca sĩ nữ (mặc áo dài)</option></select><br><br><button data-a="add" style="width:100%">' +
+          'Ca sĩ nữ (mặc áo dài)</option><option value="d">Song ca (nam + nữ)</option></select><br><br><button data-a="add" style="width:100%">' +
           'Thêm vào lịch diễn</button><br><br><button data-a="alogout">' +
           'Đăng xuất admin</button>')
         : ('<p class="sm">Chỉ admin mới thêm và chuyển bài.</p>' +
@@ -1651,7 +1664,7 @@
     flip(id) {
       const t = tracks.find(x => x.id === id);
       if (t) {
-        db.ref('tracks/' + id + '/g').set(t.g === 'f' ? 'm' : 'f');
+        db.ref('tracks/' + id + '/g').set(t.g === 'f' ? 'd' : t.g === 'd' ? 'm' : 'f');
       }
     },
     add() {
@@ -2628,6 +2641,7 @@
   singer.position.set(0, 3.2, STZ);
   scn.add(singer);
   let sFig = null;
+  let sFig2 = null;
   function drawSinger(tr) {
     const x = sgc.getContext('2d');
     x.clearRect(0, 0, 512, 128);
@@ -4159,7 +4173,7 @@
       return;
     }
     const inst = await loadCharacterModel(MODEL_CFG[kind].path, [0, 0, 0], MODEL_CFG[kind].scale);
-    if (!inst || sf !== sFig) {
+    if (!inst || (sf !== sFig && sf !== sFig2)) {
       return;
     }
     while (sf.g.children.length) {
@@ -6024,26 +6038,41 @@
     if (singer._k !== key) {
       singer._k = key;
       drawSinger(tr);
-      if (sFig) {
-        scn.remove(sFig.g);
-      }
-      const fem = tr && tr.g === 'f';
+      [sFig, sFig2].forEach(o => {
+        if (o) {
+          scn.remove(o.g);
+        }
+      });
+      sFig2 = null;
+      const duet = !!tr && tr.g === 'd';
+      const fem = !!tr && tr.g === 'f';
       sFig = person(fem ? 'f' : 'm', fem ? 0x14305a : 0x15151a, true, 0, 0);
-      sFig.g.position.set(0, .58, STZ + .2);
+      sFig.g.position.set(duet ? -1.15 : 0, .58, STZ + .2);
       scn.add(sFig.g);
       singerGLB(sFig, fem);
+      if (duet) {
+        sFig2 = person('f', 0x14305a, true, 0, 0);
+        sFig2.g.position.set(1.15, .58, STZ + .2);
+        scn.add(sFig2.g);
+        singerGLB(sFig2, true);
+      }
     }
     singer.visible = !!tr;
-    sFig.g.visible = !!tr;
-    sFig.g.rotation.y = Math.sin(t / 900) * .25;
-    if (!sFig.glb) {
-      lifeFig(sFig, t, 3.1, 0, false, false);
-      sFig.AL.rotation.x = Math.sin(t / 600) * .15;
-      sFig.AR.rotation.x = -1.9 + Math.sin(t / 500) * .08;
-    }
-    else if (sFig.glb.mixer) {
-      sFig.glb.mixer.update(dt);
-    }
+    [sFig, sFig2].forEach((o, i) => {
+      if (!o) {
+        return;
+      }
+      o.g.visible = !!tr;
+      o.g.rotation.y = Math.sin(t / 900 + i * 1.6) * .25 + (sFig2 ? (i ? -.28 : .28) : 0);
+      if (!o.glb) {
+        lifeFig(o, t, 3.1 + i * 1.3, 0, false, false);
+        o.AL.rotation.x = Math.sin(t / 600 + i) * .15;
+        o.AR.rotation.x = -1.9 + Math.sin(t / 500 + i) * .08;
+      }
+      else if (o.glb.mixer) {
+        o.glb.mixer.update(dt);
+      }
+    });
     STAFF.forEach((s, i) => {
       const f = s.fig;
       const w2 = t / 1000;
