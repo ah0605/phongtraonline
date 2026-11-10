@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b16">
+<meta name="description" content="Phòng trà ca nhạc online: nhấp trà, nghe nhạc live, trò chuyện cùng mọi người trong không gian chung.">
+<title>An Nhiên - Phòng trà online, nghe nhạc, nhấp trà cùng mọi người</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+<style>
+* {
+  box-sizing:border-box
+}
+html,body {
+  margin: 0;
+  height: 100%;
+  background: #070b16;
+  color: #f1e6c8;
+  font-family: "Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  overflow:hidden
+}
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action:none
+}
+button,input {
+  font: inherit;
+  color:inherit
+}
+button {
+  cursor: pointer;
+  background: #12234a;
+  border: 1px solid #c9a227;
+  border-radius: 999px;
+  padding: 8px 12px;
+  white-space:nowrap
+}
+button:hover {
+  background:#1b3158
+}
+button:disabled {
+  opacity:.5
+}
+input {
+  background: #0b1530;
+  border: 1px solid #8f7a3a;
+  border-radius: 8px;
+  padding: 8px;
+  width:100%
+}
+[hidden] {
+  display:none!important
+}
+#login {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5,9,20,.93);
+  z-index: 10;
+  padding:16px
+}
+h2,h3,h4 {
+  font-family:"Times New Roman",Times,serif
+}
+.box {
+  background: #0d1a36;
+  border: 1px solid #c9a227;
+  border-radius: 16px;
+  padding: 18px;
+  width: min(420px,100%);
+  max-height: 85vh;
+  overflow: auto;
+  text-align:center
+}
+.av {
+  display: grid;
+  grid-template-columns: repeat(6,1fr);
+  gap: 6px;
+  margin:12px 0
+}
+.av button {
+  font-size: 24px;
+  padding: 6px;
+  border-radius:10px
+}
+.av .on {
+  background:#c9a227;
+  color:#0b1530
+}
+#top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;
+  background: linear-gradient(#000a,#0000);
+  font-size: 14px;
+  pointer-events: none;
+  z-index:2
+}
+#chat {
+  position: fixed;
+  left: 8px;
+  bottom: calc(env(safe-area-inset-bottom,0px) + 62px);
+  width: min(340px,92vw);
+  z-index:2
+}
+#log {
+  max-height: 130px;
+  overflow-y: auto;
+  font-size: 13px;
+  background: #0008;
+  border-radius: 10px;
+  padding: 6px;
+  margin-bottom:4px
+}
+#log div {
+  margin: 2px 0;
+  word-break:break-word
+}
+#log .sys {
+  color:#f0c060
+}
+#log b {
+  color:#e6c35c
+}
+#bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 8px calc(env(safe-area-inset-bottom,0px) + 8px);
+  background: #000b;
+  z-index:3
+}
+#pn {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0009;
+  z-index: 9;
+  padding:16px
+}
+.row {
+  display: flex;
+  gap: 6px;
+  margin:6px 0
+}
+.row button:first-child {
+  flex: 1;
+  text-align: left;
+  border-radius: 10px;
+  white-space:normal
+}
+.sm {
+  font-size: 12px;
+  opacity:.65
+}
+.cl {
+  margin-top: 10px;
+  width: 100%;
+  border-radius:10px
+}
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0;
+}
+.tabs button {
+  flex: 1;
+  border-radius: 10px;
+}
+.tabs .on {
+  background: #c9a227;
+  color: #0b1530;
+}
+#acc input {
+  margin: 4px 0;
+}
+#xp {
+  height: 5px;
+  border-radius: 3px;
+  background: #0008;
+  margin-top: 3px;
+  overflow: hidden;
+}
+#xpf {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #f0c060, #ff9a4a);
+  transition: width .6s;
+}
+#lvup {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #000a;
+  text-align: center;
+  overflow: hidden;
+  animation: lvin .4s;
+}
+#lvup h1 {
+  font: 700 44px "Times New Roman", Times, serif;
+  color: #ffd27a;
+  margin: 0;
+  text-shadow: 0 0 24px #f0a030;
+}
+#lvup p {
+  margin: 6px 0;
+}
+#lvup i {
+  position: absolute;
+  top: -20px;
+  width: 8px;
+  height: 14px;
+  animation: fall 2.6s linear forwards;
+}
+@keyframes fall {
+  to {
+    transform: translateY(110vh) rotate(720deg);
+  }
+}
+@keyframes lvin {
+  from {
+    opacity: 0;
+    transform: scale(.85);
+  }
+}
+.av2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin:12px 0
+}
+.av2 button {
+  border-radius:12px
+}
+.av2 .on {
+  background:#c9a227;
+  color:#0b1530
+}
+.sw {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom:12px
+}
+.sw i {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor:pointer
+}
+.sw i.on {
+  border-color:#fff
+}
+#joy {
+  position: fixed;
+  width: 110px;
+  height: 110px;
+  margin: -55px 0 0 -55px;
+  border-radius: 50%;
+  border: 2px solid #f0c06088;
+  background: #0004;
+  z-index: 4;
+  pointer-events:none
+}
+#knob {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #f0c060aa;
+  left: 32px;
+  top:32px
+}
+#toast {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000c;
+  border: 1px solid #c9a227;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  z-index: 20;
+  pointer-events:none
+}
+.ckg {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+.ckt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: #ffffff14;
+  border: 2px solid transparent;
+  font-size: 12px;
+}
+.ckt .ic {
+  font-size: 22px;
+}
+.ckt em {
+  font-style: normal;
+  color: #f0c060;
+  font-weight: 700;
+}
+.ckt.big {
+  grid-column: span 2;
+  background: #c9a22744;
+}
+.ckt.big .ic {
+  font-size: 30px;
+}
+.ckt.done {
+  opacity: .55;
+}
+.ckt.lock {
+  opacity: .8;
+}
+.ckt u {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  text-decoration: none;
+  color: #7fe08a;
+  font-weight: 700;
+}
+.ckt.now {
+  border-color: #f0c060;
+  background: #f0c06030;
+  animation: ckp 1.2s ease-in-out infinite alternate;
+}
+@keyframes ckp {
+  from {
+    box-shadow: 0 0 0 #f0c06000;
+  }
+  to {
+    box-shadow: 0 0 14px #f0c060;
+  }
+}
+.ckbtn {
+  width: 100%;
+  border-radius: 10px;
+  background: #c9a227;
+  color: #0b1530;
+  margin-top: 4px;
+}
+.ckbtn:disabled {
+  background: #555;
+  opacity: .7;
+}
+#warm {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  background: radial-gradient(ellipse at 50% 45%, rgb(255, 247, 232) 0%, rgb(248, 236, 214) 60%, rgb(196, 182, 160) 100%);
+}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="warm"></div>
+<div id="login"><div class="box">
+  <div style="font-size:44px">🏮</div><h2 style="margin:4px 0;color:#f0c060;font:400 56px/1.1 'Great Vibes','Dancing Script','Segoe Script',cursive">An Nhiên</h2><p class="sm" style="margin:0">Phòng trà online</p>
+  <p class="sm">Nhấp trà, nghe nhạc live và trò chuyện cùng mọi người đang online</p>
+  <div class="tabs">
+    <button id="tg" class="on">Khách</button>
+    <button id="tl">Đăng nhập</button>
+    <button id="tr">Đăng ký</button>
+  </div>
+  <div id="acc" hidden>
+    <input id="un" placeholder="Tên đăng nhập (không dấu) hoặc email" autocomplete="username" maxlength="60">
+    <input id="up" type="password" placeholder="Mật khẩu (ít nhất 6 ký tự)" autocomplete="current-password" maxlength="60">
+    <p id="aerr" class="sm" style="color:#ff9a7a" hidden></p>
+    <p class="sm">Có tài khoản để lưu nhiệm vụ, điểm Thư Thái và lên cấp. Đăng ký mới sẽ giữ lại tiến độ hiện có trên máy này.</p>
+  </div>
+  <input id="nm" maxlength="16" placeholder="Tên của bạn">
+  <div class="av2">
+    <button id="gm" class="on">🚹 Nam<br><span class="sm">mặc vest</span></button>
+    <button id="gf">🚺 Nữ<br><span class="sm">mặc váy</span></button>
+  </div>
+  <div class="sw" id="sw"></div>
+  <p id="full" class="sm" style="color:#ff9a7a" hidden></p>
+  <button id="go" style="width:100%;background:#c9a227;color:#0b1530;font-weight:700">Bước vào phòng trà</button>
+  <p class="sm">Sức chứa: tối đa 50 khách cùng lúc · không hoạt động 15 phút sẽ được mời ra để nhường chỗ</p>
+  <p class="sm">Chạm sàn để đi · kéo để xoay · cuộn/chụm để zoom · điện thoại: giữ nửa trái màn hình làm joystick · phím WASD · Enter để chat</p>
+</div></div>
+<div id="ui" hidden>
+  <div id="top">
+    <div>🏮 Phòng trà · <b id="cnt" style="color:#7fe08a">● 1</b> online<span id="adm"></span></div>
+    <div>
+      <div id="score"></div>
+      <div id="xp"><i id="xpf"></i></div>
+    </div>
+  </div>
+  <div id="chat"><div id="log"></div><input id="ci" maxlength="140" placeholder="Nhấn Enter để chat…"></div>
+  <div id="bar">
+    <button data-a="emo" data-v="👋">👋 Vẫy tay</button>
+    <button data-a="emo" data-v="🥂">🥂 Nâng ly</button>
+    <button data-a="emo" data-v="❤️">❤️</button>
+    <button data-a="emo" data-v="😍" data-lv="3" hidden>😍</button>
+    <button data-a="emo" data-v="🎉" data-lv="5" hidden>🎉</button>
+    <button data-a="emo" data-v="🌸" data-lv="8" hidden>🌸</button>
+    <button data-a="emo" data-v="👑" data-lv="12" hidden>👑</button>
+    <button data-a="stg" data-v="👏">👏 Vỗ tay</button>
+    <button data-a="stg" data-v="💐">💐 Tặng hoa</button>
+    <button data-a="req">🎶 Yêu cầu bài</button>
+    <button data-a="menu">📋 Gọi nước</button>
+    <button data-a="sip">☕ Nhấp trà</button>
+    <button data-a="friends" id="frb">👥 Bạn bè</button>
+    <button data-a="cos">🎨 Cá nhân hóa</button>
+    <button data-a="shop">🛍 Cửa hàng</button>
+    <button data-a="donate">💝 Ủng hộ</button>
+    <button data-a="orders" id="ordb" hidden>🧾 Đơn hàng</button>
+    <button data-a="checkin" id="ckb">📅 Điểm danh</button>
+    <button data-a="quest">📜 Nhiệm vụ</button>
+    <button data-a="levels">⭐ Cấp & quà</button>
+    <button data-a="lineup">🗓 Lịch diễn</button>
+    <button data-a="rain" id="rainb">🌧 Bật mưa</button>
+    <button data-a="mix">🎚 Âm thanh</button>
+    <button data-a="rank">🏆 Xếp hạng</button>
+    <button data-a="leave">🚪 Rời</button>
+  </div>
+</div>
+<div id="joy" hidden><div id="knob"></div></div>
+<div id="pn" hidden></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+<script src="firebase-config.js"></script>
+<script src="shop-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

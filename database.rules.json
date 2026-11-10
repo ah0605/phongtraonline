@@ -1,0 +1,259 @@
+{
+  "rules": {
+    "admins": {
+      "$u": {
+        ".read": "auth != null && auth.uid === $u",
+        ".write": false
+      }
+    },
+    "players": {
+      ".read": "auth != null",
+      "$u": {
+        ".write": "auth != null && auth.uid === $u",
+        ".validate": "newData.hasChildren(['n','av','x','y'])",
+        "n": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "av": {
+          ".validate": "newData.isString() && newData.val().length <= 8"
+        },
+        "x": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1600"
+        },
+        "y": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000"
+        },
+        "d": {
+          ".validate": "newData.isNumber()"
+        },
+        "c": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 6"
+        },
+        "s": {
+          ".validate": "newData.isNumber() && newData.val() <= 1000000"
+        },
+        "a": {
+          "k": {
+            ".validate": "newData.isString() && newData.val().length <= 8"
+          },
+          "s": {
+            ".validate": "newData.isNumber()"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          }
+        },
+        "r": {
+          ".validate": "newData.val() === 0 || newData.val() === 1"
+        },
+        "z": {
+          ".validate": "newData.isString() && newData.val().matches(/^[0-9]\\.[0-9]\\.[0-9]$/)"
+        }
+      }
+    },
+    "chat": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "t"
+      ],
+      "$k": {
+        ".write": "auth != null && !data.exists()",
+        ".validate": "newData.hasChildren(['m','t'])",
+        "m": {
+          ".validate": "newData.isString() && newData.val().length <= 140"
+        },
+        "n": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "s": {
+          ".validate": "newData.isNumber()"
+        },
+        "t": {
+          ".validate": "newData.isNumber()"
+        },
+        "u": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        }
+      }
+    },
+    "scores": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "s"
+      ],
+      "$u": {
+        ".write": "auth != null && auth.uid === $u",
+        ".validate": "newData.hasChildren(['n','s'])",
+        "n": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "s": {
+          ".validate": "newData.isNumber() && newData.val() <= 1000000"
+        }
+      }
+    },
+    "tracks": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    },
+    "stage": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    },
+    "users": {
+      "$u": {
+        ".read": "auth != null && auth.uid === $u",
+        ".write": "auth != null && auth.uid === $u",
+        ".validate": "newData.hasChildren(['n','s'])",
+        "n": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "g": {
+          ".validate": "newData.val() === 'm' || newData.val() === 'f'"
+        },
+        "c": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 6"
+        },
+        "s": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+        },
+        "ms": {
+          ".validate": "newData.isString() && newData.val().length <= 3000"
+        },
+        "ck": {
+          ".validate": "newData.isString() && newData.val().length <= 100"
+        },
+        "z": {
+          ".validate": "newData.isString() && newData.val().length <= 8"
+        }
+      }
+    },
+    "friends": {
+      "$u": {
+        ".read": "auth != null && auth.uid === $u",
+        "$f": {
+          ".write": "auth != null && (auth.uid === $u || (auth.uid === $f && (!newData.exists() || root.child('friendReq').child($f).child($u).exists())))",
+          ".validate": "newData.hasChildren(['n','t'])",
+          "n": {
+            ".validate": "newData.isString() && newData.val().length <= 16"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "friendReq": {
+      "$to": {
+        ".read": "auth != null && auth.uid === $to",
+        "$from": {
+          ".write": "auth != null && ((auth.uid === $from && $from !== $to && !root.child('friends').child($from).child($to).exists()) || auth.uid === $to)",
+          ".validate": "newData.hasChildren(['n','t'])",
+          "n": {
+            ".validate": "newData.isString() && newData.val().length <= 16"
+          },
+          "g": {
+            ".validate": "newData.val() === 'm' || newData.val() === 'f'"
+          },
+          "c": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 6"
+          },
+          "s": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "gifts": {
+      "$to": {
+        ".read": "auth != null && auth.uid === $to",
+        "$g": {
+          ".write": "auth != null && ((!data.exists() && newData.child('f').val() === auth.uid && root.child('friends').child($to).child(auth.uid).exists()) || (auth.uid === $to && !newData.exists()))",
+          ".validate": "newData.hasChildren(['f','n','k','t'])",
+          "f": {
+            ".validate": "newData.isString() && newData.val() === auth.uid"
+          },
+          "n": {
+            ".validate": "newData.isString() && newData.val().length <= 16"
+          },
+          "k": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "owned": {
+      "$u": {
+        ".read": "auth != null && auth.uid === $u",
+        "$sku": {
+          ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+          ".validate": "newData.val() === true"
+        }
+      }
+    },
+    "donors": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "a"
+      ],
+      "$u": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+        ".validate": "newData.hasChildren(['n','a','t'])",
+        "n": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "a": {
+          ".validate": "newData.isNumber()"
+        },
+        "t": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "orders": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$u": {
+        ".read": "auth != null && auth.uid === $u",
+        "$o": {
+          ".write": "auth != null && ((auth.uid === $u && data.child('s').val() === 0 && !newData.exists()) || root.child('admins').child(auth.uid).val() === true)",
+          ".validate": "newData.hasChildren(['sku','a','c','t','s','n'])",
+          "url": {
+            ".validate": "newData.isString() && newData.val().length <= 300"
+          },
+          "sku": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "a": {
+            ".validate": "newData.isNumber() && newData.val() >= 1000 && newData.val() <= 10000000"
+          },
+          "c": {
+            ".validate": "newData.isString() && newData.val().length <= 12"
+          },
+          "n": {
+            ".validate": "newData.isString() && newData.val().length <= 16"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          },
+          "s": {
+            ".validate": "newData.val() === 0 || newData.val() === 1"
+          }
+        }
+      }
+    },
+    "shop": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    },
+    "revenue": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    }
+  }
+}
