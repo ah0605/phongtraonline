@@ -236,3 +236,12 @@ Mục "Cách thanh toán" và "Cài đặt" ở phần Cửa hàng phía trên l
 - Trần năm được chặn lúc **tạo đơn** (doanh thu đã nhận + số tiền đơn mới không được vượt trần) và đóng hẳn khi webhook làm tổng chạm trần. Các đơn đã tạo trước đó (link sống tối đa 15 phút) vẫn có thể thanh toán, nên tổng có thể vượt trần một chút.
 - Hủy đơn trong game chỉ ẩn đơn; nếu người chơi vẫn trả tiền qua link cũ thì Worker vẫn mở vật phẩm cho họ.
 - Giữ `PRICES` (Worker) khớp `prices` (shop-config.js), `YEAR_CAP`/`MAX_TX` khớp `yearCap`/`maxTx`.
+
+## Xin bài & bình chọn (nút 🎶 Xin bài & bình chọn)
+- Mỗi người một phiếu cho một bài trong danh sách phát đang nghe; bấm lại bài đó để rút phiếu, bấm bài khác để đổi phiếu. Chỉ tính phiếu của người đang ở cùng danh sách phát, phiếu quá 20 phút thì bỏ.
+- **Mạnh thường quân** (có tên trong `donors`, tức đã ủng hộ qua payOS) được tính **phiếu x2**. Rules Firebase chỉ cho ghi `w = 2` khi `donors/<uid>` tồn tại, nên không tự nâng phiếu bằng cách sửa code trên máy.
+- Trong **15 giây cuối** của bài đang phát, máy người chơi tự chốt bài nhiều phiếu nhất (không tính bài đang phát). Ai ghi trước thì thắng (`picks/<phòng>/<giờ hết bài>` chỉ ghi được một lần), cả phòng nhận thông báo "Bài kế tiếp do cả phòng chọn". Không có phiếu nào thì vòng phát chạy như cũ.
+- Bài được chèn làm vòng phát tạm dừng trong lúc nó chạy rồi tiếp tục đúng chỗ (trường `cum` trong `picks`), nên bài vẫn chạy đồng bộ cho mọi người. Admin bấm phát bài thủ công vẫn được ưu tiên như trước.
+- Người có phiếu thắng nhận **+5 🍃**. Sửa trong `watchReq` (`addScore(5)`), thời gian chốt ở `VOTE_CLOSE_MS`, hạn phiếu ở `VOTE_TTL`.
+- Nút cũ "nhắn tên bài cho ca sĩ" vẫn còn ở cuối bảng bình chọn.
+- Chốt bài chạy ở máy khách (không có máy chủ) nên người rành kỹ thuật có thể ghi một bài bất kỳ có trong `tracks`; chỉ phù hợp game vui. **Bắt buộc dán lại `database.rules.json`** (có thêm nhánh `requests` và `picks`).

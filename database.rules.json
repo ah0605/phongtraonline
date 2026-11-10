@@ -254,6 +254,48 @@
     "revenue": {
       ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
       ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    },
+    "requests": {
+      "$room": {
+        ".read": "auth != null",
+        "$u": {
+          ".write": "auth != null && auth.uid === $u",
+          ".validate": "newData.hasChildren(['k','w','t'])",
+          "k": {
+            ".validate": "newData.isString() && newData.val().length <= 30"
+          },
+          "w": {
+            ".validate": "newData.val() === 1 || (newData.val() === 2 && root.child('donors').child(auth.uid).exists())"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "picks": {
+      "$room": {
+        ".read": "auth != null",
+        "$at": {
+          ".write": "auth != null && !data.exists() && newData.exists()",
+          ".validate": "newData.hasChildren(['k','at','dur','cum','ct']) && newData.child('at').val() + '' === $at",
+          "k": {
+            ".validate": "newData.isString() && root.child('tracks').child(newData.val()).exists()"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > now - 120000 && newData.val() < now + 900000"
+          },
+          "dur": {
+            ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 7200000"
+          },
+          "cum": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "ct": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
     }
   }
 }

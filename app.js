@@ -1192,6 +1192,10 @@
       }
     });
     watchOver();
+    watchReq();
+    db.ref('donors/' + uid).on('value', d => {
+      isDonorMe = d.exists();
+    });
     setInterval(recomputeNow, 500);
     db.ref('scores').orderByChild('s').limitToLast(10).on('value', s => {
       rank = [];
@@ -1296,17 +1300,162 @@
     }
     return null;
   }
+  // ===== XIN BÀI & BÌNH CHỌN =====
+  // requests/<phòng>/<uid> = {k: mã bài, w: 1|2, t: giờ}; picks/<phòng>/<giờ hết slot> = bài được chèn vào sau bài hiện tại.
+  // Bài được chèn làm lịch phát "dừng" trong lúc nó chạy (cum = tổng thời lượng các bài chèn) nên vòng phát cũ tiếp tục đúng chỗ.
+  const VOTE_CLOSE_MS = 15000;
+  const VOTE_TTL = 20 * 60e3;
+  let reqs = {};
+  let picks = [];
+  let reqRef = null;
+  let pickRef = null;
+  let picksInit = false;
+  const seenPick = {};
+  let pickTry = 0;
+  let nowSrc = 'sched';
+  let isDonorMe = false;
+  const slotOf = t => INTRO_MS + Math.round(t.dur * 1000) + OUTRO_MS;
+  function scheduledP(k, sn) {
+    let cum = 0;
+    for (const p of picks) {
+      if (sn >= p.at && sn < p.at + p.dur) {
+        return { trackId: p.k, startedAt: p.at + INTRO_MS };
+      }
+      if (sn >= p.at + p.dur) {
+        cum = p.cum;
+      }
+    }
+    const r = scheduled(k, sn - cum);
+    return r && { trackId: r.trackId, startedAt: r.startedAt + cum };
+  }
+  function lastClose() {
+    return picks.reduce((a, p) => Math.max(a, p.ct || 0), 0);
+  }
+  // Phiếu còn hiệu lực: cùng phòng, người bỏ phiếu đang trong phòng, chưa bị vòng chọn trước "dùng", chưa quá 20 phút
+  function liveVotes() {
+    const sn = Date.now() + off;
+    const lc = lastClose();
+    const out = {};
+    Object.keys(reqs).forEach(u => {
+      const v = reqs[u];
+      const pl = PR[u];
+      if (!v || !pl || (pl.pl || 'chung') !== room || !(v.t > lc) || v.t < sn - VOTE_TTL) {
+        return;
+      }
+      if (!roomTracks(room).some(t => t.id === v.k)) {
+        return;
+      }
+      const o = out[v.k] || (out[v.k] = { s: 0, c: 0 });
+      o.s += v.w === 2 ? 2 : 1;
+      o.c++;
+    });
+    return out;
+  }
+  function topRequest() {
+    const T = liveVotes();
+    let best = null;
+    roomTracks(room).forEach(t => {
+      const o = T[t.id];
+      if (o && !(now && now.trackId === t.id) && (!best || o.s > best.s)) {
+        best = { k: t.id, s: o.s };
+      }
+    });
+    return best;
+  }
+  function maybePick(sn) {
+    if (!now || !uid || nowSrc !== 'sched') {
+      return;
+    }
+    const tr = tracks.find(t => t.id === now.trackId);
+    if (!tr) {
+      return;
+    }
+    const end = now.startedAt + Math.round(tr.dur * 1000) + OUTRO_MS;
+    if (sn < end - VOTE_CLOSE_MS || sn >= end - 2000 || pickTry === end || picks.some(p => p.at === end)) {
+      return;
+    }
+    pickTry = end;
+    const w = topRequest();
+    if (!w) {
+      return;
+    }
+    const nt = tracks.find(t => t.id === w.k);
+    const prev = picks.filter(p => p.at < end).pop();
+    const dur = slotOf(nt);
+    // chờ ngẫu nhiên vài giây để không phải ai cũng ghi; ai ghi trước thì thắng (rules chỉ cho ghi một lần)
+    setTimeout(() => {
+      if (picks.some(p => p.at === end)) {
+        return;
+      }
+      db.ref('picks/' + room + '/' + end).set({
+        k: w.k, at: end, dur, cum: (prev ? prev.cum : 0) + dur, ct: TS()
+      }).catch(() => {
+        // đã có người ghi trước hoặc mất mạng: không sao
+      });
+    }, Math.random() * 3000);
+  }
+  function watchReq() {
+    if (reqRef) {
+      reqRef.off();
+    }
+    if (pickRef) {
+      pickRef.off();
+    }
+    reqs = {};
+    picks = [];
+    picksInit = false;
+    reqRef = db.ref('requests/' + room);
+    reqRef.on('value', s => {
+      reqs = s.val() || {};
+      if (cur === 'vote') {
+        HD.req();
+      }
+    });
+    pickRef = db.ref('picks/' + room).orderByKey().limitToLast(3);
+    pickRef.on('value', s => {
+      const L = [];
+      s.forEach(x => {
+        L.push(x.val());
+      });
+      picks = L;
+      L.forEach(p => {
+        if (seenPick[room + p.at]) {
+          return;
+        }
+        seenPick[room + p.at] = 1;
+        const sn = Date.now() + off;
+        if (picksInit && p.at > sn - 2000) {
+          const t = tracks.find(x => x.id === p.k);
+          if (t) {
+            toast('🎶 Bài kế tiếp do cả phòng chọn: ' + t.title);
+            const mine = reqs[uid];
+            if (mine && mine.k === p.k && mine.t <= p.ct) {
+              addScore(5);
+              setTimeout(() => toast('🗳 Bài bạn bình chọn được phát! +5 🍃'), 2600);
+            }
+          }
+        }
+      });
+      picksInit = true;
+      recomputeNow();
+      if (cur === 'vote') {
+        HD.req();
+      }
+    });
+  }
   function recomputeNow() {
     const sn = Date.now() + off;
     let n = null;
+    nowSrc = 'sched';
     if (over) {
       const t = tracks.find(x => x.id === over.trackId);
       if (t && sn < over.startedAt + Math.round((t.dur || 0) * 1000) + OUTRO_MS) {
         n = over;
+        nowSrc = 'over';
       }
     }
     if (!n) {
-      n = scheduled(room, sn);
+      n = scheduledP(room, sn);
     }
     const ch = !n !== !now || (n && now && (n.trackId !== now.trackId || n.startedAt !== now.startedAt));
     now = n;
@@ -1315,7 +1464,11 @@
       if (cur === 'lineup') {
         HD.lineup();
       }
+      if (cur === 'vote') {
+        HD.req();
+      }
     }
+    maybePick(sn);
   }
   function watchOver() {
     if (overRef) {
@@ -1746,6 +1899,7 @@
       });
       cnt();
       watchOver();
+      watchReq();
       now = null;
       recomputeNow();
       if (!now) {
@@ -1769,6 +1923,44 @@
     },
     emo: v => doAct(v, 0), stg: v => doAct(v, 1), sip,
     req() {
+      const T = liveVotes();
+      const mine = reqs[uid] && reqs[uid].t > lastClose() ? reqs[uid].k : '';
+      const L = roomTracks(room).slice().sort((x, y) => ((T[y.id] || {}).s || 0) - ((T[x.id] || {}).s || 0));
+      let h = '<h3>🎶 Xin bài & bình chọn</h3><p class="sm">Danh sách phát: <b>' + esc(THEMES.find(x => x[0] === room)[1])
+        + '</b>. Chọn bài bạn muốn nghe tiếp theo. Bài nhiều phiếu nhất sẽ được chèn ngay sau bài đang phát '
+        + '(phiếu chốt ở ' + (VOTE_CLOSE_MS / 1000) + ' giây cuối của bài). Mỗi người một phiếu, bấm lại để rút phiếu. '
+        + (isDonorMe ? '🏅 Bạn là Mạnh thường quân nên phiếu của bạn tính <b>x2</b>.'
+          : 'Ai đã ủng hộ qua 💝 được tính phiếu <b>x2</b>.') + '</p>';
+      h += L.length ? L.map(t => {
+        const o = T[t.id];
+        const cur2 = now && now.trackId === t.id;
+        return '<div class="row"><button data-a="vote" data-v="' + esc(t.id) + '"' + (cur2 ? ' disabled' : '') + '>'
+          + (cur2 ? '▶ ' : mine === t.id ? '✔ ' : '🗳 ') + esc(t.title) + ' — ' + esc(t.artist)
+          + '<span class="sm"> · ' + (o ? o.s + ' phiếu' : 'chưa có phiếu') + '</span></button></div>';
+      }).join('') : '<p class="sm">Danh sách phát này chưa có bài.</p>';
+      h += '<hr><div class="row"><button data-a="reqtext">✍ Nhắn tên bài khác cho ca sĩ</button></div>';
+      panel(h, 'vote');
+    },
+    vote(id) {
+      const t = tracks.find(x => x.id === id);
+      if (!uid || !t) {
+        return;
+      }
+      if (now && now.trackId === id) {
+        return toast('Bài này đang phát rồi 🎵');
+      }
+      const ref = db.ref('requests/' + room + '/' + uid);
+      if (reqs[uid] && reqs[uid].k === id && reqs[uid].t > lastClose()) {
+        ref.remove();
+        return toast('Đã rút phiếu');
+      }
+      ref.set({ k: id, w: isDonorMe ? 2 : 1, t: TS() }).then(
+        () => toast('🗳 Đã bình chọn: ' + t.title + (isDonorMe ? ' (phiếu x2)' : ''))
+      ).catch(
+        () => toast('Chưa gửi được phiếu, thử lại nhé')
+      );
+    },
+    reqtext() {
       const t = (prompt('Bạn muốn nghe bài gì?') || '').trim().slice(0, 100);
       if (t) {
         chatPush({
