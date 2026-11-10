@@ -1624,7 +1624,10 @@
           'Ca sĩ nữ (mặc áo dài)</option></select><br><br><button data-a="add" style="width:100%">' +
           'Thêm vào lịch diễn</button><br><br><button data-a="alogout">' +
           'Đăng xuất admin</button>')
-        : ('<p class="sm">Chỉ admin mới thêm và chuyển bài.</p><button data-a="alogin">' +
+        : ('<p class="sm">Chỉ admin mới thêm và chuyển bài.</p>' +
+          '<p class="sm">Tài khoản hiện tại: ' + esc((auth.currentUser && (auth.currentUser.email || 'ẩn danh')) || '') +
+          '<br>UID: <b>' + esc(uid || '') + '</b><br>Nếu đây là tài khoản admin, hãy thêm UID này vào <code>admins</code> trên Firebase (giá trị <code>true</code>).</p>' +
+          '<button data-a="alogin">' +
           'Đăng nhập admin</button>');
       panel(h, 'lineup');
     },
