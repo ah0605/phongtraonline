@@ -192,6 +192,24 @@ h2,h3,h4 {
 #acc input {
   margin: 4px 0;
 }
+.pw {
+  position: relative;
+  display: block;
+}
+.pw input {
+  padding-right: 44px;
+}
+.pw button.eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: 0;
+  padding: 4px 8px;
+  font-size: 18px;
+  line-height: 1;
+}
 #xp {
   height: 5px;
   border-radius: 3px;
@@ -402,7 +420,7 @@ h2,h3,h4 {
   </div>
   <div id="acc" hidden>
     <input id="un" placeholder="Tên đăng nhập (không dấu) hoặc email" autocomplete="username" maxlength="60">
-    <input id="up" type="password" placeholder="Mật khẩu (ít nhất 6 ký tự)" autocomplete="current-password" maxlength="60">
+    <div class="pw"><input id="up" type="password" placeholder="Mật khẩu (ít nhất 6 ký tự)" autocomplete="current-password" maxlength="60"><button type="button" class="eye" data-a="pwt" data-v="up" title="Hiện / ẩn mật khẩu" aria-label="Hiện hoặc ẩn mật khẩu">👁</button></div>
     <p id="aerr" class="sm" style="color:#ff9a7a" hidden></p>
     <p class="sm">Có tài khoản để lưu nhiệm vụ, điểm Thư Thái và lên cấp. Đăng ký mới sẽ giữ lại tiến độ hiện có trên máy này.</p>
   </div>

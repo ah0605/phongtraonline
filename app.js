@@ -1559,6 +1559,15 @@
     $('pn').hidden = false;
   }
   const HD = {
+    pwt(id) {
+      const i = $(id);
+      const show = i.type === 'password';
+      i.type = show ? 'text' : 'password';
+      const b = document.querySelector('[data-a="pwt"][data-v="' + id + '"]');
+      if (b) {
+        b.textContent = show ? '🙈' : '👁';
+      }
+    },
     close() {
       cur = '';
       $('pn').hidden = true;
@@ -1675,7 +1684,8 @@
     },
     alogin() {
       panel(('<h3>Đăng nhập admin</h3><input id="em" type="email" placeholder="Email">' +
-        '<br><br><input id="pw" type="password" placeholder="Mật khẩu">' +
+        '<br><br><span class="pw"><input id="pw" type="password" placeholder="Mật khẩu">' +
+        '<button type="button" class="eye" data-a="pwt" data-v="pw" title="Hiện / ẩn mật khẩu">👁</button></span>' +
         '<br><br><button data-a="dologin" style="width:100%">Đăng nhập</button>'), 'login');
     },
     dologin() {
