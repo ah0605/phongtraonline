@@ -1,6 +1,6 @@
 const SHOP = {
   // Địa chỉ Cloudflare Worker sau khi deploy (ví dụ: https://phongtra-pay.ten-ban.workers.dev). Để trống thì game chỉ hiện "chưa cấu hình".
-  api: '',
+  api: 'https://phongtra-pay.phongtra.workers.dev',
   yearCap: 900000000,
   donateAmounts: [10000, 20000, 50000, 100000],
   minDonate: 5000,
