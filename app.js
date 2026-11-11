@@ -328,19 +328,19 @@
   const lvPrev = s => lvT(lvl(s) - 1);
   const REW = [
     [2, '🏷 Biển tên hiện số cấp · 🍃 huy hiệu · 🍵 tặng trà cho bạn'],
-    [3, '😍 Biểu cảm mới'],
-    [4, '🎨 Màu tên Ngọc bích · 🍰 tặng bánh cho bạn'],
-    [5, '🎉 Biểu cảm mới · thưởng +10% điểm · 🛋 Sofa VIP sát sân khấu · 🌸 huy hiệu'],
+    [3, '😍 Biểu cảm mới · 🎐 Kỹ năng Chuông gió'],
+    [4, '🎨 Màu tên Ngọc bích · 🍰 tặng bánh cho bạn · ☕ Ly trà đầy hơn (6 ngụm)'],
+    [5, '🎉 Biểu cảm mới · thưởng +10% điểm · 🛋 Sofa VIP sát sân khấu · 🌸 huy hiệu · 🌺 Kỹ năng Mưa hoa'],
     [6, '✨ Hiệu ứng lấp lánh khi biểu cảm'],
     [7, '🎨 Màu tên Hồng sen'],
-    [8, '🌸 Biểu cảm mới · ⭐ huy hiệu · 💎 tặng kim cương cho bạn'],
+    [8, '🌸 Biểu cảm mới · ⭐ huy hiệu · 💎 tặng kim cương cho bạn · 🎆 Kỹ năng Pháo hoa sân khấu'],
     [9, '🌸 Hiệu ứng cánh hoa khi biểu cảm'],
-    [10, '✨ Thưởng +20% điểm · 🎨 Màu tên Vàng kim'],
-    [12, '👑 Biểu cảm vương giả · huy hiệu'],
+    [10, '✨ Thưởng +20% điểm · 🎨 Màu tên Vàng kim · ☕ Ly trà đầy hơn nữa (7 ngụm)'],
+    [12, '👑 Biểu cảm vương giả · huy hiệu · 🌟 Kỹ năng Tỏa sáng'],
     [13, '💫 Hiệu ứng sao băng khi biểu cảm'],
     [14, '🎨 Màu tên Tím hoàng gia'],
     [15, '🌟 Thưởng +30% điểm'],
-    [16, '🌟 Huy hiệu tối thượng']
+    [16, '🌟 Huy hiệu tối thượng · 🏮 Kỹ năng Thả đèn lồng']
   ];
   const ZN = [[1, 'Mặc định', ''], [4, 'Ngọc bích', '#7fe8d0'], [7, 'Hồng sen', '#ff9fc0'], [10, 'Vàng kim', '#ffd24a'], [14, 'Tím hoàng gia', '#c9a0ff'],
     [99, 'Xanh dạ quang', '#39ff88', 'nc_neon'], [99, 'Đỏ ruby', '#ff4d5e', 'nc_ruby'], [99, 'Cầu vồng', 'rainbow', 'nc_rainbow']];
@@ -886,9 +886,37 @@
       n: me.n, g: me.av, c: me.c, s: score, ms: localStorage.tp_ms || null, ck: localStorage.tp_ck || null, z: localStorage.tp_z || null
     }), 2500);
   }
-  function addScore(n, fixed) {
+  // Giới hạn điểm mỗi ngày cho nguồn điểm lặp lại, để không ai lên cấp quá nhanh:
+  //  act  = nhấp trà, gọi nước, vỗ tay/tặng hoa; gift = điểm nhận từ quà bạn bè.
+  // Nhiệm vụ, điểm danh, bình chọn bài đã có giới hạn riêng nên không tính vào đây.
+  const CAP = { act: 60, gift: 50 };
+  const CAP_MSG = {
+    act: '🍃 Hôm nay bạn đã nhận đủ điểm nhấp trà, gọi nước và cổ vũ. Làm nhiệm vụ, điểm danh hoặc quay lại ngày mai nhé!',
+    gift: '🍃 Hôm nay bạn đã nhận đủ điểm từ quà bạn bè, quà vẫn là tấm lòng của họ.'
+  };
+  const budget = src => {
+    const m = mst();
+    return Math.max(0, CAP[src] - ((m.e && m.e[src]) || 0));
+  };
+  function addScore(n, fixed, src) {
     const l0 = lvl(score);
     n = fixed ? n : Math.max(1, Math.round(n * (1 + lvBonus(score))));
+    if (src) {
+      const m = mst();
+      m.e = m.e || {};
+      const left = Math.max(0, CAP[src] - (m.e[src] || 0));
+      if (left <= 0) {
+        if (!m.e['n' + src]) {
+          m.e['n' + src] = 1;
+          localStorage.tp_ms = JSON.stringify(m);
+          toast(CAP_MSG[src]);
+        }
+        return 0;
+      }
+      n = Math.min(n, left);
+      m.e[src] = (m.e[src] || 0) + n;
+      localStorage.tp_ms = JSON.stringify(m);
+    }
     score += n;
     localStorage.tp_score = score;
     hud();
@@ -902,6 +930,7 @@
       db.ref('scores/' + uid).set({ n: me.n, s: score });
       myRef.update({ s: score });
     }, 3000);
+    return n;
   }
   $('nm').value = localStorage.tp_n || '';
   const swatch = () => {
@@ -1103,6 +1132,10 @@
         aura(p);
         if (v.a.k === '🥂') {
           sparkTable(p);
+        }
+        if (SKL.some(s => s.id === v.a.k) && !(p.skT > performance.now() - 20000)) {
+          p.skT = performance.now();
+          skillFx(v.a.k, p);
         }
         if (v.a.s) {
           shoot(v.a.k, p.x, p.y);
@@ -1443,6 +1476,92 @@
         HD.req();
       }
     });
+  }
+  // ===== KỸ NĂNG THEO CẤP =====
+  // Kỹ năng chủ động chỉ tạo hiệu ứng cho cả phòng (không cho điểm), có thời gian hồi nên không làm lên cấp nhanh hơn.
+  // Người khác thấy kỹ năng qua players/<uid>/a.k (chuỗi emoji) như các biểu cảm thường.
+  const SKL = [
+    { id: '🎐', lv: 3, name: 'Chuông gió', cd: 40, d: 'Tiếng chuông gió nhẹ và những đốm sáng bay quanh bạn.' },
+    { id: '🌺', lv: 5, name: 'Mưa hoa', cd: 90, d: 'Cánh hoa rơi khắp phòng trà, mọi người đều thấy.' },
+    { id: '🎆', lv: 8, name: 'Pháo hoa sân khấu', cd: 120, d: 'Pháo hoa nở rộ phía trên sân khấu.' },
+    { id: '🌟', lv: 12, name: 'Tỏa sáng', cd: 150, d: 'Ánh sao bao quanh bạn trong vài giây, đi đâu cũng thấy.' },
+    { id: '🏮', lv: 16, name: 'Thả đèn lồng', cd: 180, d: 'Đèn lồng bay lên từ khắp sàn phòng trà.' }
+  ];
+  const skUsed = {};
+  try {
+    Object.assign(skUsed, JSON.parse(localStorage.tp_sk || '{}'));
+  }
+  catch (e) {
+    // dữ liệu hỏng thì coi như chưa dùng
+  }
+  const skLeft = s => Math.max(0, Math.ceil(((skUsed[s.id] || 0) + s.cd * 1000 - Date.now()) / 1000));
+  const fxAdd = o => {
+    if (fx.length < 160) {
+      fx.push(o);
+    }
+  };
+  function skillFx(k, p) {
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    if (k === '🎐') {
+      for (let i = 0; i < 6; i++) {
+        fxAdd({ e: i % 2 ? '✨' : '🎐', sx: p.x, sy: p.y, tx: p.x + rnd(-70, 70), ty: p.y + rnd(-70, 40), t: -i * .1 });
+      }
+    }
+    else if (k === '🌺') {
+      for (let i = 0; i < 26; i++) {
+        const x = rnd(60, W - 60);
+        const y = rnd(TOP, H - 60);
+        fxAdd({ e: i % 3 ? '🌸' : '🌺', sx: x, sy: y, tx: x + rnd(-60, 60), ty: y + rnd(20, 80), t: -rnd(0, 1.2) });
+      }
+    }
+    else if (k === '🎆') {
+      for (let i = 0; i < 24; i++) {
+        const an = i / 24 * Math.PI * 2;
+        fxAdd({ e: i % 3 ? '✨' : '🎆', sx: 800, sy: 170, tx: 800 + Math.cos(an) * 300, ty: 170 + Math.sin(an) * 110, t: -.2 - (i % 4) * .08 });
+      }
+    }
+    else if (k === '🌟') {
+      let n = 0;
+      const iv = setInterval(() => {
+        if (++n > 12) {
+          return clearInterval(iv);
+        }
+        for (let i = 0; i < 3; i++) {
+          fxAdd({ e: i ? '✨' : '🌟', sx: p.x, sy: p.y, tx: p.x + rnd(-60, 60), ty: p.y + rnd(-60, 60), t: -i * .06 });
+        }
+      }, 600);
+    }
+    else if (k === '🏮') {
+      for (let i = 0; i < 14; i++) {
+        const x = rnd(80, W - 80);
+        const y = rnd(TOP + 80, H - 60);
+        fxAdd({ e: '🏮', sx: x, sy: y, tx: x + rnd(-40, 40), ty: y - rnd(120, 260), t: -rnd(0, 1.4) });
+      }
+    }
+  }
+  function useSkill(id) {
+    const s = SKL.find(x => x.id === id);
+    if (!s || lvl(score) < s.lv) {
+      return;
+    }
+    if (skLeft(s)) {
+      return toast('Kỹ năng đang hồi, còn ' + skLeft(s) + ' giây');
+    }
+    skUsed[s.id] = Date.now();
+    localStorage.tp_sk = JSON.stringify(skUsed);
+    myRef.update({ a: { k: s.id, s: 0, t: TS() } });
+    bubble(me, s.id);
+    skillFx(s.id, me);
+    if (s.id === '🎆') {
+      AE.fanfare();
+    }
+    else if (s.id === '🌺' || s.id === '🏮') {
+      AE.bell();
+    }
+    else {
+      AE.chime();
+    }
+    HD.skills();
   }
   // ===== TẶNG BÀI HÁT (💌) =====
   // dedics/<mã đơn> = {u, f: người tặng, to: người nhận, m: lời nhắn, k: mã bài | sn+day: bài đặt trước, p: giờ bắt đầu bài khi đã phát}
@@ -1790,7 +1909,7 @@
       mission('stage');
       if (Date.now() - lastStageScore > 20000) {
         lastStageScore = Date.now();
-        addScore(k === '💐' ? 3 : 1);
+        addScore(k === '💐' ? 3 : 1, false, 'act');
       }
     }
   }
@@ -1802,15 +1921,17 @@
       return;
     }
     lastSip = Date.now();
-    me.lv -= 20;
+    me.lv -= lvl(score) >= 10 ? 15 : lvl(score) >= 4 ? 17 : 20;
     AE.sip();
     actAnim(me, '🍵');
     myRef.update({ a: {
         k: '🍵', s: 0, t: TS()
       } });
-    addScore(1);
+    const got = addScore(1, false, 'act');
     mission('sip');
-    toast('Thư Thái +1 🍃');
+    if (got) {
+      toast('Thư Thái +' + got + ' 🍃');
+    }
     if (me.lv <= 0) {
       me.d = -1;
       myRef.update({ d: -1 });
@@ -2100,7 +2221,7 @@
       me.d = +i;
       me.lv = 100;
       myRef.update({ d: me.d });
-      addScore(2);
+      addScore(2, false, 'act');
       mission('order');
       AE.bell();
       HD.close();
@@ -2239,7 +2360,9 @@
         + '<h4>🎁 Quà theo cấp</h4>'
         + REW.map(r => '<div class="row"><span>' + (L >= r[0] ? '✅' : '🔒') + ' Cấp ' + r[0] + ': ' + r[1] + '</span></div>').join('')
         + '<p class="sm">Mỗi cấp cần nhiều hơn cấp trước 100 điểm (Cấp 2 = 100, Cấp 3 = 300, Cấp 4 = 600...).</p>'
-        + '<p class="sm">Điểm Thư Thái nhận từ điểm danh, nhiệm vụ, nhấp trà, tặng hoa cho ca sĩ.</p>',
+        + '<p class="sm">Điểm Thư Thái nhận từ điểm danh, nhiệm vụ, nhấp trà, tặng hoa cho ca sĩ.</p>'
+        + '<p class="sm">🍃 Hôm nay còn ' + budget('act') + '/' + CAP.act + ' điểm nhấp trà, gọi nước, cổ vũ và ' + budget('gift') + '/' + CAP.gift
+        + ' điểm từ quà bạn bè. Nhiệm vụ và điểm danh không nằm trong mức này, hãy làm đều mỗi ngày để lên cấp đều đặn.</p>',
         'levels'
       );
     },
@@ -2529,9 +2652,9 @@
       if (err || !ok) {
         return;
       }
-      addScore(it[3], true);
+      const got = addScore(it[3], true, 'gift');
       AE.fanfare();
-      toast('🎁 ' + (g.n || 'Bạn bè') + ' tặng bạn ' + it[0] + ' ' + it[1] + ' +' + it[3] + ' 🍃');
+      toast('🎁 ' + (g.n || 'Bạn bè') + ' tặng bạn ' + it[0] + ' ' + it[1] + (got ? ' +' + got + ' 🍃' : ''));
       for (let i = 0; i < 5; i++) {
         fx.push({
           e: it[0], sx: me.x, sy: me.y, tx: me.x + (Math.random() - .5) * 90, ty: me.y + (Math.random() - .5) * 90, t: -i * .1
@@ -2951,6 +3074,28 @@
     DD.day = g('dday') != null ? g('dday') : DD.day;
   }
   Object.assign(HD, {
+    skills() {
+      const L = lvl(score);
+      const row = s => {
+        const left = skLeft(s);
+        return '<div class="row" style="flex-wrap:wrap"><span style="flex:1;text-align:left">' + s.id + ' <b>' + s.name + '</b> <span class="sm">· Cấp ' + s.lv + '</span><br>'
+          + '<span class="sm">' + s.d + ' Hồi ' + s.cd + ' giây.</span></span>'
+          + (L < s.lv ? '<button disabled>🔒 Cấp ' + s.lv + '</button>'
+            : '<button data-a="skill" data-v="' + s.id + '"' + (left ? ' disabled' : '') + '>' + (left ? left + 's' : 'Dùng') + '</button>') + '</div>';
+      };
+      panel('<h3>✨ Kỹ năng</h3><p class="sm">Lên cấp để mở kỹ năng mới. Kỹ năng chỉ tạo hiệu ứng cho cả phòng, không tăng điểm.</p>'
+        + SKL.map(row).join('')
+        + '<h4>☕ Ly trà đầy hơn (tự động)</h4><p class="sm">'
+        + (L >= 10 ? '✅ Mỗi ly uống được 7 ngụm.' : L >= 4 ? '✅ Mỗi ly uống được 6 ngụm. Cấp 10: 7 ngụm.' : '🔒 Cấp 4: mỗi ly uống được 6 ngụm (hiện 5 ngụm).') + '</p>', 'skills');
+    },
+    skill(id) {
+      useSkill(id);
+    },
+    guide() {
+      if (window.openGuide) {
+        window.openGuide();
+      }
+    },
     ded() {
       if (!acct) {
         return panel('<h3>💌 Tặng bài hát</h3><p class=\"sm\">Đăng ký hoặc đăng nhập ở màn hình vào phòng để tặng bài hát cho người thân nhé.</p>', 'ded');
@@ -3166,6 +3311,7 @@
       m.d = d;
       m.p = {};
       m.ok = {};
+      m.e = {};
     }
     if (m.w !== w) {
       m.w = w;

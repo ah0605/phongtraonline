@@ -245,3 +245,8 @@ Mục "Cách thanh toán" và "Cài đặt" ở phần Cửa hàng phía trên l
 - Người có phiếu thắng nhận **+5 🍃**. Sửa trong `watchReq` (`addScore(5)`), thời gian chốt ở `VOTE_CLOSE_MS`, hạn phiếu ở `VOTE_TTL`.
 - Nút cũ "nhắn tên bài cho ca sĩ" vẫn còn ở cuối bảng bình chọn.
 - Chốt bài chạy ở máy khách (không có máy chủ) nên người rành kỹ thuật có thể ghi một bài bất kỳ có trong `tracks`; chỉ phù hợp game vui. **Bắt buộc dán lại `database.rules.json`** (có thêm nhánh `requests` và `picks`).
+
+## Lên cấp chậm vừa phải & Kỹ năng
+- Điểm lặp lại (nhấp trà, gọi nước, vỗ tay/tặng hoa) giới hạn **60 điểm/ngày**, điểm nhận từ quà bạn bè giới hạn **50 điểm/ngày** (hằng số `CAP` trong `app.js`). Nhiệm vụ, điểm danh, bình chọn bài không tính vào mức này. Ước tính: Cấp 2 trong ngày đầu, Cấp 5 sau khoảng 1 tuần, Cấp 10 khoảng 1 tháng, Cấp 16 khoảng 3 tháng nếu chơi đều.
+- Nút **✨ Kỹ năng** (mảng `SKL`): Chuông gió (Cấp 3), Mưa hoa (5), Pháo hoa sân khấu (8), Tỏa sáng (12), Thả đèn lồng (16). Kỹ năng chỉ tạo hiệu ứng, có thời gian hồi, không cho điểm. Ly trà đầy hơn: Cấp 4 uống 6 ngụm, Cấp 10 uống 7 ngụm.
+- Điểm và mức giới hạn trong ngày nằm ở trình duyệt (và đồng bộ tài khoản qua trường `ms`), người biết sửa localStorage vẫn có thể gian lận. Muốn chặt hơn cần tính điểm ở server.

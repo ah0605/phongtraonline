@@ -405,6 +405,21 @@ h2,h3,h4 {
   mix-blend-mode: multiply;
   background: radial-gradient(ellipse at 50% 45%, rgb(255, 247, 232) 0%, rgb(248, 236, 214) 60%, rgb(196, 182, 160) 100%);
 }
+#guide { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(5,9,20,.94); padding: 16px }
+#guide .gbox { background: #0d1a36; border: 1px solid #c9a227; border-radius: 16px; padding: 20px 18px 14px; width: min(440px,100%); max-height: 90vh; overflow: auto; text-align: center }
+#guide .gic { font-size: 44px }
+#guide h2 { margin: 4px 0 2px; color: #f0c060; font-size: 22px }
+#guide .gcount { font-size: 12px; opacity: .6; margin-bottom: 10px }
+#guide .gbody { text-align: left; font-size: 14px; line-height: 1.5; min-height: 150px }
+#guide .gbody p { margin: 8px 0 }
+#guide .gdots { display: flex; justify-content: center; gap: 8px; margin: 12px 0 }
+#guide .gdots i { width: 9px; height: 9px; border-radius: 50%; background: #3a4a75; cursor: pointer }
+#guide .gdots i.on { background: #f0c060 }
+#guide .gnav { display: flex; gap: 8px }
+#guide .gnav button { flex: 1 }
+#guide .gnav button:disabled { opacity: .35; cursor: default }
+#guide .gnext { background: #c9a227; color: #0b1530; font-weight: 700 }
+#guide .gskip { margin-top: 10px; background: none; border: none; font-size: 12px; opacity: .6; text-decoration: underline }
 </style>
 </head>
 <body>
@@ -432,6 +447,7 @@ h2,h3,h4 {
   <div class="sw" id="sw"></div>
   <p id="full" class="sm" style="color:#ff9a7a" hidden></p>
   <button id="go" style="width:100%;background:#c9a227;color:#0b1530;font-weight:700">Bước vào phòng trà</button>
+  <button id="gdb" type="button" style="width:100%;margin-top:8px">📖 Hướng dẫn chơi</button>
   <p class="sm">Sức chứa: tối đa 50 khách cùng lúc · không hoạt động 15 phút sẽ được mời ra để nhường chỗ</p>
   <p class="sm">Chạm sàn để đi · kéo để xoay · cuộn/chụm để zoom · điện thoại: giữ nửa trái màn hình làm joystick · phím WASD · Enter để chat</p>
 </div></div>
@@ -468,11 +484,13 @@ h2,h3,h4 {
     <button data-a="checkin" id="ckb">📅 Điểm danh</button>
     <button data-a="quest">📜 Nhiệm vụ</button>
     <button data-a="levels">⭐ Cấp & quà</button>
+    <button data-a="skills">✨ Kỹ năng</button>
     <button data-a="plist">🎧 Danh sách phát</button>
     <button data-a="lineup">🗓 Lịch diễn</button>
     <button data-a="rain" id="rainb">🌧 Bật mưa</button>
     <button data-a="mix">🎚 Âm thanh</button>
     <button data-a="rank">🏆 Xếp hạng</button>
+    <button data-a="guide">📖 Hướng dẫn</button>
     <button data-a="leave">🚪 Rời</button>
   </div>
 </div>
@@ -487,5 +505,6 @@ h2,h3,h4 {
 <script src="firebase-config.js"></script>
 <script src="shop-config.js"></script>
 <script src="app.js"></script>
+<script src="guide.js"></script>
 </body>
 </html>
