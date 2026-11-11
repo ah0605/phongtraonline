@@ -1153,6 +1153,7 @@
       isAdmin = s.val() === true;
       $('adm').textContent = isAdmin ? ' · 🎛 Admin' : '';
       $('ordb').hidden = !isAdmin;
+      $('dedb').hidden = !isAdmin;
       if (isAdmin) {
         sAdminInit();
       }
@@ -1443,6 +1444,117 @@
       }
     });
   }
+  // ===== TẶNG BÀI HÁT (💌) =====
+  // dedics/<mã đơn> = {u, f: người tặng, to: người nhận, m: lời nhắn, k: mã bài | sn+day: bài đặt trước, p: giờ bắt đầu bài khi đã phát}
+  // Chỉ worker (sau khi payOS báo tiền về) hoặc admin mới tạo được. Ai trong phòng cũng "giành" ghi p một lần khi bài bắt đầu.
+  const DD = { all: {}, mode: 'list', k: '', to: '', m: '', sn: '', day: '', sent: false };
+  let DED = null;
+  let dedFor = 0;
+  function dedLoad(n) {
+    if (!n || dedFor === n.startedAt) {
+      return;
+    }
+    dedFor = n.startedAt;
+    const st = n.startedAt;
+    db.ref('dedics').orderByChild('k').equalTo(n.trackId).once('value').then(s => {
+      let done = null;
+      let first = null;
+      s.forEach(x => {
+        const v = x.val();
+        if (v.p === st) {
+          done = v;
+        }
+        else if (!v.p && !first) {
+          first = [x.key, v];
+        }
+      });
+      if (done) {
+        return dedStart(done, st);
+      }
+      if (!first || Date.now() + off > st + 30000) {
+        return;
+      }
+      db.ref('dedics/' + first[0] + '/p').transaction(c => c == null ? st : undefined).then(r => {
+        if (r.snapshot.val() === st) {
+          dedStart(first[1], st);
+        }
+      }).catch(() => {});
+    }).catch(() => {
+      dedFor = 0;
+    });
+  }
+  function dedStart(v, st) {
+    if (!now || now.startedAt !== st) {
+      return;
+    }
+    DED = { f: v.f, to: v.to, m: v.m, until: performance.now() + 45000 };
+    const el = (tag, css, txt) => {
+      const e = document.createElement(tag);
+      e.style.cssText = css;
+      e.textContent = txt;
+      return e;
+    };
+    let c = $('ded');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'ded';
+      c.style.cssText = 'position:fixed;top:170px;left:50%;transform:translateX(-50%);z-index:59;background:#2a0f2aee;'
+        + 'border:1px solid #ff9ec4;border-radius:14px;padding:10px 18px;text-align:center;color:#ffd6e6;'
+        + 'pointer-events:none;max-width:88vw;transition:opacity .8s';
+      document.body.appendChild(c);
+    }
+    c.textContent = '';
+    c.append(
+      el('div', 'font-size:13px', '💌 Bài hát này được gửi tặng'),
+      el('b', 'font-size:18px;color:#fff', 'Dành cho ' + v.to),
+      el('div', 'font-style:italic;margin:4px 0', '“' + v.m + '”'),
+      el('div', 'font-size:13px', '— Từ ' + v.f + ' —')
+    );
+    c.hidden = false;
+    c.style.opacity = '1';
+    clearTimeout(dedStart._t);
+    dedStart._t = setTimeout(() => {
+      c.style.opacity = '0';
+    }, 22000);
+    addLog({ m: '💌 ' + v.f + ' gửi tặng bài hát cho ' + v.to + ': ' + v.m, s: 1, t: Date.now() + off });
+    AE.fanfare();
+    try {
+      const ss = window.speechSynthesis;
+      if (ss && window.SpeechSynthesisUtterance && Date.now() + off < st + 5000) {
+        setTimeout(() => {
+          const u = new SpeechSynthesisUtterance('Ca khúc này được bạn ' + v.f + ' gửi tặng bạn ' + v.to + '.');
+          u.lang = 'vi-VN';
+          u.rate = .95;
+          const vo = ss.getVoices().find(x => /^vi/i.test(x.lang));
+          if (vo) {
+            u.voice = vo;
+          }
+          ss.speak(u);
+        }, 2600);
+      }
+    }
+    catch (err) {
+      // không đọc được giọng nói thì chỉ hiện chữ
+    }
+  }
+  // Ước lượng giờ bài được phát lần tới trong phòng hiện tại (chưa tính phiếu chèn bài sắp tới)
+  function dedNext(id) {
+    const L = roomTracks(room);
+    const i = L.findIndex(t => t.id === id);
+    if (i < 0) {
+      return 0;
+    }
+    const sn = Math.floor(Date.now() + off);
+    const cum = picks.reduce((c, p) => sn >= p.at + p.dur ? p.cum : c, 0);
+    const total = L.reduce((x, t) => x + slotOf(t), 0);
+    const o = L.slice(0, i).reduce((x, t) => x + slotOf(t), 0);
+    const s2 = sn - cum;
+    let base = s2 - s2 % total + o;
+    if (base < s2) {
+      base += total;
+    }
+    return base + cum + INTRO_MS;
+  }
   function recomputeNow() {
     const sn = Date.now() + off;
     let n = null;
@@ -1461,6 +1573,7 @@
     now = n;
     if (ch) {
       syncAudio();
+      dedLoad(n);
       if (cur === 'lineup') {
         HD.lineup();
       }
@@ -2170,6 +2283,11 @@
       HD[b.dataset.a](b.dataset.v);
     }
   });
+  document.addEventListener('change', e => {
+    if (e.target.id === 'ddk') {
+      HD.ddk();
+    }
+  });
   document.addEventListener('input', e => {
     const k = e.target.dataset.k;
     if (k) {
@@ -2516,6 +2634,7 @@
     ? '<p style="color:#f0c060">🙏 Cửa hàng và ủng hộ đang tạm nghỉ, sẽ mở lại ngày 1/1/' + new Date(SH.closed + 7 * 3600e3).getUTCFullYear()
       + '. Cảm ơn mọi người đã đồng hành cùng phòng trà!</p>' : '';
   const money = n => Number(n).toLocaleString('vi-VN') + 'đ';
+  const skuLabel = o => o.sku === 'donate' ? '💝 Ủng hộ' : o.sku === 'dd' ? '🎁 Tặng bài hát' : ((ITEMS.find(x => x[0] === o.sku) || [])[1] || o.sku);
   const ITEMS = [];
   [[ZN, '🎨 Màu tên'], [ZB, '🏷 Huy hiệu'], [ZE, '✨ Hiệu ứng']].forEach(g => g[0].forEach(o => {
     if (o[3]) {
@@ -2586,6 +2705,17 @@
       return;
     }
     SH.adm = true;
+    db.ref('dedics').limitToLast(60).on('value', s => {
+      DD.all = {};
+      s.forEach(x => {
+        DD.all[x.key] = x.val();
+      });
+      const n = Object.values(DD.all).filter(v => !v.k).length;
+      $('dedb').textContent = '🎁 Lời tặng' + (n ? ' 🔴' + n : '');
+      if (cur === 'dedadm') {
+        HD.dedadm();
+      }
+    });
     db.ref('revenue/' + vnYear()).on('value', s => {
       SH.rev = s.val() || 0;
       if (cur === 'orders') {
@@ -2612,7 +2742,7 @@
     b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
   const nPending = () => Object.values(SH.orders).filter(o => o.s === 0).length;
   let ordBusy = false;
-  async function mkOrder(sku, amount) {
+  async function mkOrder(sku, amount, extra) {
     if (isClosed()) {
       return toast('Cửa hàng và ủng hộ tạm nghỉ, sẽ mở lại đầu năm sau 🙏');
     }
@@ -2637,13 +2767,16 @@
       const r = await fetch(SHOP.api.replace(/\/$/, '') + '/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await auth.currentUser.getIdToken() },
-        body: JSON.stringify({ sku, amount: Math.round(amount) })
+        body: JSON.stringify(Object.assign({ sku, amount: Math.round(amount) }, extra || {}))
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.id) {
         return toast(j.error || 'Không tạo được đơn, thử lại sau nhé');
       }
       SH.orders[j.id] = SH.orders[j.id] || { sku, a: j.amount, c: j.code, n: me.n, s: 0, url: j.url };
+      if (sku === 'dd') {
+        DD.sent = true;
+      }
       HD.pay(j.id);
     }
     catch (e) {
@@ -2664,7 +2797,7 @@
       if (pend.length) {
         h += '<h4>⏳ Đơn chờ thanh toán</h4>' + pend.map(([id, o]) => {
           const it = ITEMS.find(x => x[0] === o.sku);
-          return '<div class="row"><button data-a="pay" data-v="' + esc(id) + '">' + esc(o.sku === 'donate' ? '💝 Ủng hộ' : it ? it[1] : o.sku)
+          return '<div class="row"><button data-a="pay" data-v="' + esc(id) + '">' + esc(skuLabel(o))
             + ' <span class="sm">· ' + money(o.a) + ' · mã ' + esc(o.c) + '</span></button></div>';
         }).join('');
       }
@@ -2713,13 +2846,13 @@
       }
       const it = ITEMS.find(x => x[0] === o.sku);
       const ok = typeof o.url === 'string' && /^https:\/\//.test(o.url);
-      panel('<h3>' + (o.sku === 'donate' ? '💝 Ủng hộ ' : '🛍 ') + esc(o.sku === 'donate' ? money(o.a) : it ? it[1] : o.sku) + '</h3>'
+      panel('<h3>' + (o.sku === 'donate' ? '💝 Ủng hộ ' : o.sku === 'dd' ? '' : '🛍 ') + esc(o.sku === 'donate' ? money(o.a) : skuLabel(o)) + '</h3>'
         + (ok ? '<p>Số tiền: <b>' + money(o.a) + '</b> <span class="sm">· mã ' + esc(o.c) + '</span></p>'
           + '<div class="row"><a href="' + esc(o.url) + '" target="_blank" rel="noopener" '
           + 'style="display:block;flex:1;text-align:center;padding:10px;border-radius:10px;background:#d4a640;color:#1a1f3a;font-weight:bold;text-decoration:none">'
           + '💳 Mở trang thanh toán payOS</a></div>'
           + '<p class="sm">Số tiền đã được cố định, bạn chỉ cần quét QR và chuyển <b>đúng số tiền</b> đó (tối đa ' + money(SHOP.maxTx) + '/lần). '
-          + 'Chuyển xong, vật phẩm tự mở sau vài giây và có thông báo. Link hết hạn sau 15 phút; đơn chờ hiện trong 🛍 Cửa hàng.</p>'
+          + 'Chuyển xong, ' + (o.sku === 'dd' ? 'lời tặng tự được gửi lên lịch' : 'vật phẩm tự mở') + ' sau vài giây. Link hết hạn sau 15 phút; đơn chờ hiện trong 🛍 Cửa hàng.</p>'
           : '<p class="sm" style="color:#ff9a7a">Đơn này chưa có link thanh toán, hãy hủy và tạo lại.</p>')
         + (o.s === 0 ? '<div class="row"><button data-a="ocancel" data-v="' + esc(id) + '">🗑 Hủy đơn này</button></div>' : ''), 'pay');
     },
@@ -2742,7 +2875,7 @@
         + (ks.length ? ks.map(k => {
           const o = SH.all[k];
           const it = ITEMS.find(x => x[0] === o.sku);
-          return '<div class="row"><span style="flex:1;text-align:left">' + esc(o.sku === 'donate' ? '💝 Ủng hộ' : it ? it[1] : o.sku)
+          return '<div class="row"><span style="flex:1;text-align:left">' + esc(skuLabel(o))
             + ' · <b>' + money(o.a) + '</b><br><span class="sm">' + esc(o.n) + ' · mã <b>' + esc(o.c) + '</b></span></span>'
             + '<button data-a="oconf" data-v="' + esc(k) + '">✅</button><button data-a="orej" data-v="' + esc(k) + '">✖</button></div>';
         }).join('') : '<p class="sm">Không có đơn nào đang chờ.</p>'), 'orders');
@@ -2762,6 +2895,15 @@
         const prev = (await db.ref('donors/' + u).once('value')).val();
         up['donors/' + u] = { n: o.n, a: ((prev && prev.a) || 0) + o.a, t: TS() };
         up['owned/' + u + '/bd_donor'] = true;
+      }
+      else if (o.sku === 'dd') {
+        if (!o.dd) {
+          return toast('Đơn này thiếu nội dung lời tặng, hãy kiểm tra payorders trên Firebase');
+        }
+        const ex = (await db.ref('dedics/' + id).once('value')).exists();
+        if (!ex) {
+          up['dedics/' + id] = Object.assign({ u, f: o.n, t: TS() }, o.dd);
+        }
       }
       else {
         up['owned/' + u + '/' + o.sku] = true;
@@ -2796,6 +2938,139 @@
       }
       const [u, id] = k.split(':');
       db.ref('orders/' + u + '/' + id).remove();
+    }
+  });
+  const ddDay = d => new Date(Date.now() + off + 7 * 3600e3 + d * 86400e3).toISOString().slice(0, 10);
+  const ddHm = ms => new Date(ms).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  function ddSave() {
+    const g = id => $(id) ? $(id).value : null;
+    DD.to = g('ddto') != null ? g('ddto') : DD.to;
+    DD.m = g('ddm') != null ? g('ddm') : DD.m;
+    DD.k = g('ddk') != null ? g('ddk') : DD.k;
+    DD.sn = g('ddsn') != null ? g('ddsn') : DD.sn;
+    DD.day = g('dday') != null ? g('dday') : DD.day;
+  }
+  Object.assign(HD, {
+    ded() {
+      if (!acct) {
+        return panel('<h3>💌 Tặng bài hát</h3><p class=\"sm\">Đăng ký hoặc đăng nhập ở màn hình vào phòng để tặng bài hát cho người thân nhé.</p>', 'ded');
+      }
+      const L = roomTracks(room);
+      if (!DD.k || !L.some(t => t.id === DD.k)) {
+        DD.k = L[0] ? L[0].id : '';
+      }
+      const inp = 'style=\"width:100%;padding:8px;border-radius:8px;background:#2a170c;color:inherit\"';
+      let h = '<h3>💌 Tặng bài hát</h3><p class=\"sm\">Gửi một lời nhắn tới người thân, bạn bè. Khi bài hát được phát, tên người nhận và lời nhắn hiện '
+        + 'trên màn hình LED, trong khung thông báo và được MC đọc lên. Phí <b>' + money(SHOP.dedPrice) + '</b>/bài, thanh toán qua payOS.</p>' + closedMsg()
+        + '<div class=\"tabs\"><button data-a=\"ddmode\" data-v=\"list\"' + (DD.mode === 'list' ? ' class=\"on\"' : '') + '>🎵 Bài có sẵn</button>'
+        + '<button data-a=\"ddmode\" data-v=\"order\"' + (DD.mode === 'order' ? ' class=\"on\"' : '') + '>🗓 Đặt bài trước</button></div>';
+      if (DD.mode === 'list') {
+        h += L.length
+          ? '<select id=\"ddk\" ' + inp + '>' + L.map(t => '<option value=\"' + esc(t.id) + '\"' + (t.id === DD.k ? ' selected' : '') + '>'
+            + esc(t.title) + ' — ' + esc(t.artist) + '</option>').join('') + '</select>'
+            + '<p class=\"sm\" id=\"ddnx\"></p>'
+          : '<p class=\"sm\">Danh sách phát này chưa có bài, hãy thử đặt bài trước.</p>';
+      }
+      else {
+        h += '<p class=\"sm\">Bài chưa có trong danh sách cần đặt <b>trước ít nhất ' + SHOP.dedMinDays + ' ngày</b> để phòng trà kịp chuẩn bị bản nhạc. '
+          + 'Nếu phòng trà không chuẩn bị được, đơn sẽ được hoàn tiền.</p>'
+          + '<input id=\"ddsn\" maxlength=\"80\" placeholder=\"Tên bài hát\" value=\"' + esc(DD.sn) + '\"><br><br>'
+          + '<label class=\"sm\">Phát vào ngày (từ ' + ddDay(SHOP.dedMinDays).split('-').reverse().join('/') + ')</label>'
+          + '<input id=\"dday\" type=\"date\" min=\"' + ddDay(SHOP.dedMinDays) + '\" max=\"' + ddDay(90) + '\" value=\"' + esc(DD.day || ddDay(SHOP.dedMinDays)) + '\">';
+      }
+      h += '<br><br><input id=\"ddto\" maxlength=\"16\" placeholder=\"Tặng cho ai? (tối đa 16 ký tự)\" value=\"' + esc(DD.to) + '\"><br><br>'
+        + '<textarea id=\"ddm\" maxlength=\"100\" rows=\"3\" placeholder=\"Lời nhắn (tối đa 100 ký tự)\" ' + inp + '>' + esc(DD.m) + '</textarea>'
+        + '<p class=\"sm\">Người gửi hiện là <b>' + esc(me.n) + '</b>. Lời nhắn có nội dung xúc phạm sẽ bị xóa và hoàn tiền.</p>'
+        + '<div class=\"row\"><button data-a=\"ddpay\" style=\"width:100%\">💳 Thanh toán ' + money(SHOP.dedPrice) + '</button></div>';
+      panel(h, 'ded');
+      HD.ddest();
+    },
+    ddest() {
+      const e = $('ddnx');
+      const k = $('ddk') && $('ddk').value;
+      if (e && k) {
+        const t = dedNext(k);
+        e.textContent = t ? 'Dự kiến phát khoảng ' + ddHm(t - off) + ' (có thể lệch nếu có bài được bình chọn chen vào).' : '';
+      }
+    },
+    ddk() {
+      ddSave();
+      HD.ddest();
+    },
+    ddmode(v) {
+      ddSave();
+      DD.mode = v === 'order' ? 'order' : 'list';
+      HD.ded();
+    },
+    ddpay() {
+      ddSave();
+      const to = DD.to.trim();
+      const m = DD.m.trim();
+      if (!to || !m) {
+        return toast('Hãy nhập tên người nhận và lời nhắn');
+      }
+      let x;
+      if (DD.mode === 'list') {
+        if (!DD.k || !roomTracks(room).some(t => t.id === DD.k)) {
+          return toast('Hãy chọn một bài trong danh sách');
+        }
+        x = { k: DD.k, to, m };
+      }
+      else {
+        if (!DD.sn.trim()) {
+          return toast('Hãy nhập tên bài hát');
+        }
+        if (!DD.day || DD.day < ddDay(SHOP.dedMinDays)) {
+          return toast('Bài đặt trước phải từ ngày ' + ddDay(SHOP.dedMinDays).split('-').reverse().join('/') + ' trở đi');
+        }
+        x = { sn: DD.sn.trim(), day: DD.day, to, m };
+      }
+      mkOrder('dd', SHOP.dedPrice, { dd: x }).then(() => {
+        if (DD.sent) {
+          DD.sent = false;
+          DD.to = '';
+          DD.m = '';
+          DD.sn = '';
+        }
+      });
+    },
+    dedadm() {
+      if (!isAdmin) {
+        return;
+      }
+      const ids = Object.keys(DD.all).sort().reverse();
+      const opts = tracks.filter(t => +t.dur > 0).map(t => '<option value=\"' + esc(t.id) + '\">' + esc(t.title) + ' — ' + esc(t.artist) + '</option>').join('');
+      panel('<h3>🎁 Lời tặng bài hát</h3><p class=\"sm\">Lời tặng đã thanh toán. Bài đặt trước (🔴) cần bạn thêm nhạc vào lịch diễn rồi bấm \"Gắn bài\". '
+        + 'Xóa lời nhắn không phù hợp và hoàn tiền cho người gửi.</p>'
+        + (ids.length ? ids.map(id => {
+          const v = DD.all[id];
+          const tr = v.k && tracks.find(t => t.id === v.k);
+          const head = '<b>' + esc(v.f) + '</b> → <b>' + esc(v.to) + '</b><br><span class=\"sm\">“' + esc(v.m) + '”</span><br>';
+          const st = !v.k ? '🔴 Cần chuẩn bị: <b>' + esc(v.sn) + '</b> · phát ngày ' + esc(String(v.day).split('-').reverse().join('/'))
+            : (tr ? esc(tr.title) : '(bài đã bị xóa)') + ' · ' + (v.p ? '✅ đã phát ' + ddHm(v.p - off) : '⏳ chờ phát');
+          return '<div class=\"row\" style=\"flex-wrap:wrap\"><span style=\"flex:1;text-align:left;min-width:100%\">' + head + '<span class=\"sm\">' + st + '</span></span>'
+            + (!v.k ? '<select id=\"dl_' + esc(id) + '\" style=\"flex:1;padding:6px;border-radius:8px;background:#2a170c;color:inherit\">' + opts + '</select>'
+              + '<button data-a=\"dedlink\" data-v=\"' + esc(id) + '\">Gắn bài</button>' : '')
+            + (v.p ? '<button data-a=\"dedreset\" data-v=\"' + esc(id) + '\" title=\"Cho phát lại ở lần sau\">↺ Phát lại</button>' : '')
+            + '<button data-a=\"deddel\" data-v=\"' + esc(id) + '\">🗑</button></div>';
+        }).join('') : '<p class=\"sm\">Chưa có lời tặng nào.</p>'), 'dedadm');
+    },
+    dedlink(id) {
+      const s = $('dl_' + id);
+      if (isAdmin && s && s.value) {
+        db.ref('dedics/' + id + '/k').set(s.value).then(() => toast('Đã gắn bài, lời tặng sẽ hiện khi bài phát')).catch(() => toast('Lỗi, thử lại'));
+      }
+    },
+    dedreset(id) {
+      if (isAdmin) {
+        db.ref('dedics/' + id + '/p').remove().then(() => toast('Lời tặng sẽ được phát lại ở lần sau'));
+      }
+    },
+    deddel(id) {
+      const v = DD.all[id];
+      if (isAdmin && v && confirm('Xóa lời tặng của ' + v.f + ' gửi ' + v.to + '?')) {
+        db.ref('dedics/' + id).remove();
+      }
     }
   });
   const CK = [10, 15, 20, 25, 30, 40, 100];
@@ -3073,6 +3348,42 @@
   const ledX = ledC.getContext('2d');
   const ledTex = new THREE.CanvasTexture(ledC);
   let ledK = -1;
+  function drawDed() {
+    const wrap = (txt, w) => {
+      let ln = '';
+      const out = [];
+      txt.split(' ').forEach(wd => {
+        if (ln && ledX.measureText(ln + ' ' + wd).width > w) {
+          out.push(ln);
+          ln = wd;
+        }
+        else {
+          ln = ln ? ln + ' ' + wd : wd;
+        }
+      });
+      out.push(ln);
+      return out.slice(0, 3);
+    };
+    ledX.fillStyle = 'rgba(20,6,26,.72)';
+    ledX.fillRect(0, 0, 256, 128);
+    ledX.textAlign = 'center';
+    ledX.shadowColor = '#ff7aa8';
+    ledX.shadowBlur = 6;
+    ledX.fillStyle = '#ffb0cf';
+    ledX.font = 'bold 12px sans-serif';
+    ledX.fillText('💌 BÀI HÁT DÀNH TẶNG', 128, 20);
+    ledX.fillStyle = '#fff2b0';
+    ledX.font = 'bold 20px sans-serif';
+    ledX.fillText(DED.to, 128, 46);
+    ledX.fillStyle = '#ffffff';
+    ledX.font = 'italic 13px sans-serif';
+    wrap('“' + DED.m + '”', 230).forEach((s, i) => ledX.fillText(s, 128, 70 + i * 16));
+    ledX.fillStyle = '#ffb0cf';
+    ledX.font = '12px sans-serif';
+    ledX.fillText('— Từ ' + DED.f + ' —', 128, 120);
+    ledX.shadowBlur = 0;
+    ledX.textAlign = 'start';
+  }
   function drawLed(t) {
     const hb = 222 + 6 * Math.sin(t / 5000);
     const g = ledX.createLinearGradient(0, 0, 0, 128);
@@ -3102,6 +3413,14 @@
       ledX.stroke();
     }
     ledX.globalAlpha = 1;
+    if (DED) {
+      if (performance.now() < DED.until) {
+        drawDed();
+      }
+      else {
+        DED = null;
+      }
+    }
     ledTex.needsUpdate = true;
   }
   let disc = null;
@@ -5635,11 +5954,11 @@
       x.shadowColor = '#ffb040';
       x.shadowBlur = 24;
       x.fillStyle = '#ffe3a0';
-      x.fillText('An Nhiên', w / 2, 92);
+      x.fillText('S.Glow', w / 2, 92);
     };
     const neon = tx(512, 128, drawNeon);
     if (document.fonts && document.fonts.load) {
-      document.fonts.load('92px "Great Vibes"', 'An Nhiên').then(() => {
+      document.fonts.load('92px "Great Vibes"', 'S.Glow').then(() => {
         drawNeon(neon.image.getContext('2d'), neon.image.width, neon.image.height);
         neon.needsUpdate = true;
       }).catch(() => {});

@@ -4,6 +4,9 @@ const PRICES = {
   bd_bfly: 19000, bd_dragon: 39000,
   ea_bfly: 29000, ea_heart: 29000, ea_fire: 39000
 };
+const DD_PRICE = 20000;      // giá một lời tặng bài hát
+const DD_MIN_DAYS = 2;       // bài chưa có trong danh sách phải đặt trước ít nhất 2 ngày
+const DD_MAX_DAYS = 90;
 const PAYOS = 'https://api-merchant.payos.vn';
 const LINK_TTL = 15 * 60;
 
@@ -24,6 +27,8 @@ function safeEq(a, b) {
   }
   return d === 0;
 }
+const clean = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+const vnDay = ms => new Date(ms + 7 * 3600e3).toISOString().slice(0, 10);
 const vnYear = () => new Date(Date.now() + 7 * 3600e3).getUTCFullYear();
 const yearEnd = y => Date.UTC(y + 1, 0, 1) - 7 * 3600e3;
 
@@ -151,10 +156,41 @@ async function createOrder(req, env, h) {
   const sku = String(body.sku || '');
   const min = +env.MIN_DONATE || 5000, max = +env.MAX_TX || 10000000, cap = +env.YEAR_CAP || 900000000;
   let amount;
+  let dd = null;
   if (sku === 'donate') {
     amount = Math.round(+body.amount);
     if (!(amount >= min && amount <= max)) {
       return json({ error: 'Số tiền ủng hộ phải từ ' + min + ' đến ' + max }, 400, h);
+    }
+  }
+  else if (sku === 'dd') {
+    amount = DD_PRICE;
+    const b = body.dd || {};
+    dd = { to: clean(b.to, 16), m: clean(b.m, 100) };
+    if (!dd.to) {
+      return json({ error: 'Hãy nhập tên người nhận' }, 400, h);
+    }
+    if (!dd.m) {
+      return json({ error: 'Hãy nhập lời nhắn' }, 400, h);
+    }
+    if (b.k) {
+      const k = clean(b.k, 30);
+      const tr = /^[-\w]+$/.test(k) ? await dbGet(env, 'tracks/' + k) : null;
+      if (!tr || !(+tr.dur > 0)) {
+        return json({ error: 'Bài hát này không còn trong danh sách' }, 400, h);
+      }
+      dd.k = k;
+    }
+    else {
+      dd.sn = clean(b.sn, 80);
+      dd.day = clean(b.day, 10);
+      const lo = vnDay(Date.now() + DD_MIN_DAYS * 86400e3), hi = vnDay(Date.now() + DD_MAX_DAYS * 86400e3);
+      if (!dd.sn) {
+        return json({ error: 'Hãy nhập tên bài hát' }, 400, h);
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dd.day) || dd.day < lo || dd.day > hi) {
+        return json({ error: 'Bài ngoài danh sách phải đặt trước ít nhất ' + DD_MIN_DAYS + ' ngày (tối đa ' + DD_MAX_DAYS + ' ngày)' }, 400, h);
+      }
     }
   }
   else if (PRICES[sku]) {
@@ -171,7 +207,7 @@ async function createOrder(req, env, h) {
   if (rev + amount > cap) {
     return json({ error: 'Phòng trà tạm nghỉ nhận thêm trong năm nay, cảm ơn bạn 🙏' }, 403, h);
   }
-  if (sku !== 'donate' && (await dbGet(env, 'owned/' + uid + '/' + sku))) {
+  if (sku !== 'donate' && sku !== 'dd' && (await dbGet(env, 'owned/' + uid + '/' + sku))) {
     return json({ error: 'Bạn đã sở hữu vật phẩm này' }, 400, h);
   }
   const mine = (await dbGet(env, 'orders/' + uid)) || {};
@@ -184,8 +220,8 @@ async function createOrder(req, env, h) {
   const pay = await payosCreate(env, orderCode, amount, code, env.SITE_URL);
   const ts = { '.sv': 'timestamp' };
   await dbPatch(env, {
-    ['orders/' + uid + '/' + orderCode]: { sku, a: amount, c: code, n: name, t: ts, s: 0, url: pay.checkoutUrl },
-    ['payorders/' + orderCode]: { u: uid, sku, a: amount, n: name, t: ts, st: 0 }
+    ['orders/' + uid + '/' + orderCode]: Object.assign({ sku, a: amount, c: code, n: name, t: ts, s: 0, url: pay.checkoutUrl }, dd ? { dd } : {}),
+    ['payorders/' + orderCode]: Object.assign({ u: uid, sku, a: amount, n: name, t: ts, st: 0 }, dd ? { dd } : {})
   });
   return json({ id: String(orderCode), url: pay.checkoutUrl, amount, code }, 200, h);
 }
@@ -227,6 +263,12 @@ async function webhook(req, env) {
       const prev = (await dbGet(env, 'donors/' + rec.u + '/a')) || 0;
       up['donors/' + rec.u] = { n: rec.n, a: manual ? prev : prev + rec.a, t: { '.sv': 'timestamp' } };
       up['owned/' + rec.u + '/bd_donor'] = true;
+    }
+    else if (rec.sku === 'dd') {
+      // admin xác nhận tay trước đó có thể đã tạo lời tặng rồi: không ghi đè (giữ nguyên dấu "đã phát")
+      if (rec.dd && !(await dbGet(env, 'dedics/' + oc))) {
+        up['dedics/' + oc] = Object.assign({ u: rec.u, f: rec.n, t: { '.sv': 'timestamp' } }, rec.dd);
+      }
     }
     else {
       up['owned/' + rec.u + '/' + rec.sku] = true;

@@ -5,6 +5,8 @@ const SHOP = {
   donateAmounts: [10000, 20000, 50000, 100000],
   minDonate: 5000,
   maxTx: 10000000,
+  dedPrice: 20000,   // phí tặng một bài hát (phải khớp DD_PRICE trong worker/payos-worker.js)
+  dedMinDays: 2,     // bài chưa có trong danh sách phải đặt trước ít nhất bấy nhiêu ngày
   prices: {
     nc_neon: 19000,
     nc_ruby: 19000,
