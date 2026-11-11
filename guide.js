@@ -36,6 +36,7 @@
       ic: '🎨', t: 'Kết bạn và cá nhân hóa',
       p: ['👥 Bạn bè: kết bạn và gửi quà cho nhau. 🎨 Cá nhân hóa và 🛍 Cửa hàng giúp nhân vật của bạn nổi bật hơn.',
         '🌧 Bật mưa và 🎚 Âm thanh giúp bạn chỉnh không khí phòng theo ý thích. 💝 Ủng hộ để góp phần duy trì phòng trà.',
+        '💎 Dịch vụ VIP (tùy chọn): 👑 Thẻ VIP, 📢 Loa phòng trà gửi thông báo lên màn LED, 🍾 Bàn riêng cho bạn và bạn bè. Chỉ là đặc quyền, không bán điểm hay cấp.',
         'Lưu ý: không hoạt động 15 phút bạn sẽ được mời ra để nhường chỗ cho người khác. Chúc bạn có những phút giây thư thái!']
     }
   ];

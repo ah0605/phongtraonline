@@ -334,6 +334,65 @@
           ".validate": "newData.isNumber()"
         }
       }
+    },
+    "vip": {
+      ".read": "auth != null",
+      "$u": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+        ".validate": "newData.hasChildren(['e'])",
+        "e": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "annp": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$u": {
+        ".read": "auth != null && auth.uid === $u",
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+      }
+    },
+    "ann": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "p"
+      ],
+      "$id": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+        ".validate": "newData.hasChildren(['f','m','t','p'])",
+        "f": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "m": {
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "t": {
+          ".validate": "newData.isNumber()"
+        },
+        "p": {
+          ".write": "auth != null && data.val() === 0 && newData.isNumber() && newData.val() > now - 120000 && newData.val() < now + 60000",
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "tbl": {
+      ".read": "auth != null",
+      "$tid": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+        ".validate": "$tid.matches(/^t[0-9]{1,2}$/) && newData.hasChildren(['u','f','e'])",
+        "f": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "e": {
+          ".validate": "newData.isNumber()"
+        },
+        "g": {
+          "$g": {
+            ".write": "auth != null && data.parent().parent().child('u').val() === auth.uid && data.parent().parent().child('e').val() > now",
+            ".validate": "newData.val() === true && newData.parent().numChildren() <= 8"
+          }
+        }
+      }
     }
   }
 }

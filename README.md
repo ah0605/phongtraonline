@@ -250,3 +250,11 @@ Mục "Cách thanh toán" và "Cài đặt" ở phần Cửa hàng phía trên l
 - Điểm lặp lại (nhấp trà, gọi nước, vỗ tay/tặng hoa) giới hạn **60 điểm/ngày**, điểm nhận từ quà bạn bè giới hạn **50 điểm/ngày** (hằng số `CAP` trong `app.js`). Nhiệm vụ, điểm danh, bình chọn bài không tính vào mức này. Ước tính: Cấp 2 trong ngày đầu, Cấp 5 sau khoảng 1 tuần, Cấp 10 khoảng 1 tháng, Cấp 16 khoảng 3 tháng nếu chơi đều.
 - Nút **✨ Kỹ năng** (mảng `SKL`): Chuông gió (Cấp 3), Mưa hoa (5), Pháo hoa sân khấu (8), Tỏa sáng (12), Thả đèn lồng (16). Kỹ năng chỉ tạo hiệu ứng, có thời gian hồi, không cho điểm. Ly trà đầy hơn: Cấp 4 uống 6 ngụm, Cấp 10 uống 7 ngụm.
 - Điểm và mức giới hạn trong ngày nằm ở trình duyệt (và đồng bộ tài khoản qua trường `ms`), người biết sửa localStorage vẫn có thể gian lận. Muốn chặt hơn cần tính điểm ở server.
+
+## Dịch vụ trả phí (💎 Dịch vụ VIP)
+Giá nằm ở `SVC` trong `worker/payos-worker.js` (máy chủ quyết định giá thật) và `SHOP.svc` trong `shop-config.js` (chỉ để hiển thị), hai nơi phải khớp.
+- **👑 Thẻ VIP** 49.000đ/30 ngày, cộng dồn khi gia hạn, tối đa còn 90 ngày. Lưu ở `vip/<uid>/e`. Quyền lợi: biển tên viền vàng, MC chào khi vào phòng, ngồi sofa sát sân khấu không cần Cấp 5, giá ưu đãi cho Loa và Bàn riêng.
+- **📢 Loa phòng trà** 10.000đ (VIP 8.000đ), tối đa 80 ký tự. Worker ghi vào `annp/<uid>/<mã đơn>` chờ duyệt. Admin bấm **📢 Duyệt loa** để Duyệt, Sửa hoặc Từ chối. Khi duyệt, nội dung chuyển sang `ann/` và lần lượt hiện 25 giây trên màn LED, khung thông báo và khung chat khi có người trong phòng.
+- **🍾 Bàn riêng** 15.000đ bàn thường, 25.000đ bàn sofa (VIP 10.000đ / 18.000đ), giữ 2 giờ. Worker kiểm tra bàn còn trống và giữ chỗ 12 phút trong lúc thanh toán (`tblhold`). Dữ liệu ở `tbl/t<số>`, chủ bàn mời tối đa 8 người. Việc chặn ghế chỉ làm ở giao diện, người sửa mã trình duyệt vẫn có thể ngồi.
+- Hoàn tiền (loa bị từ chối, bàn trùng) làm thủ công qua payOS. Admin xem và hủy bàn, xem danh sách VIP trong **📢 Duyệt loa**.
+- Khi nâng cấp cần: dán lại `database.rules.json`, deploy lại worker, đưa `app.js`, `index.html`, `guide.js`, `shop-config.js` lên hosting.

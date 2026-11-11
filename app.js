@@ -1187,6 +1187,7 @@
       $('adm').textContent = isAdmin ? ' · 🎛 Admin' : '';
       $('ordb').hidden = !isAdmin;
       $('dedb').hidden = !isAdmin;
+      $('annb').hidden = !isAdmin;
       if (isAdmin) {
         sAdminInit();
       }
@@ -1237,12 +1238,15 @@
         rank.unshift(x.val());
       });
     });
-    chatPush({
-      n: '', m: me.n + ' vào phòng trà 🏮', s: 1, u: uid, t: TS()
+    db.ref('vip/' + uid + '/e').once('value').then(s => s.val() > Date.now() + off, () => false).then(v => {
+      chatPush({
+        n: '', m: v ? '👑 Kính chào quý khách VIP ' + me.n + ' đã quang lâm phòng trà, mời quý khách an tọa 🏮' : me.n + ' vào phòng trà 🏮', s: 1, u: uid, t: TS()
+      });
     });
     ckBadge();
     fInit();
     sInit();
+    svInit();
     if (!ckInfo().claimed) {
       setTimeout(() => {
         if (!cur) {
@@ -1562,6 +1566,194 @@
       AE.chime();
     }
     HD.skills();
+  }
+  // ===== DỊCH VỤ TRẢ PHÍ: THẺ VIP, LOA PHÒNG TRÀ, BÀN RIÊNG =====
+  // vip/<uid>/e      = hạn thẻ VIP (ms)            (worker ghi sau khi payOS báo tiền về)
+  // annp/<uid>/<đơn> = loa chờ duyệt, riêng tư    (worker ghi, admin duyệt)
+  // ann/<đơn>        = loa đã duyệt, p=0 là chưa hiện, p>0 là giờ đã hiện (ai trong phòng cũng giành ghi p một lần)
+  // tbl/t<i>         = bàn riêng {u, f, e: hết hạn, g: khách mời}   (ghế chỉ bị chặn ở phía giao diện)
+  const SV = { tab: 'vip', ann: '', pick: '', sent: false };
+  let VIPS = {};
+  let TBL = {};
+  const ANN = { q: [], cur: null, shown: {}, mine: {}, pend: [], busy: 0 };
+  const sNow = () => Date.now() + off;
+  const vipU = u => !!(u && VIPS[u] && VIPS[u].e > sNow());
+  const vipMe = () => vipU(uid);
+  const hm = ms => new Date(ms).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const dmy = ms => new Date(ms).toLocaleDateString('vi-VN');
+  const tblName = i => {
+    if (i < 5) {
+      return 'Bàn sofa số ' + (i + 1) + ' (sát sân khấu)';
+    }
+    const k = i - 5;
+    return 'Bàn hàng ' + (Math.floor(k / 5) + 1) + ', vị trí ' + (k % 5 + 1);
+  };
+  const resvOf = sd => {
+    const r = sd && sd.t != null ? TBL['t' + sd.t] : null;
+    return r && r.e > sNow() ? r : null;
+  };
+  const resvBlock = sd => {
+    const r = resvOf(sd);
+    return !!r && r.u !== uid && !(r.g && r.g[uid]) && !amAdmin;
+  };
+  const myTbl = () => {
+    const k = Object.keys(TBL).find(x => TBL[x].u === uid && TBL[x].e > sNow());
+    return k ? [k, TBL[k]] : null;
+  };
+  const svPrice = {
+    ann: () => vipMe() ? SHOP.svc.annVip : SHOP.svc.ann,
+    tbl: i => i < 5 ? (vipMe() ? SHOP.svc.tblSofaVip : SHOP.svc.tblSofa) : (vipMe() ? SHOP.svc.tblChairVip : SHOP.svc.tblChair)
+  };
+
+  // Biển "Bàn của ..." trên bàn đã đặt, và "Đang chọn" khi đang xem trong panel
+  const SIGN = [];
+  function signUpdate() {
+    if (typeof scn === 'undefined') {
+      return;
+    }
+    TABLES.forEach((t, i) => {
+      const r = TBL['t' + i];
+      const label = r && r.e > sNow() ? '🍾 Bàn của ' + r.f : SV.pick === 't' + i ? '📍 Bàn bạn đang chọn' : '';
+      let s = SIGN[i];
+      if (!label) {
+        if (s) {
+          s.visible = false;
+        }
+        return;
+      }
+      if (!s) {
+        const cn = cvs(256, 64);
+        s = sprite(new THREE.CanvasTexture(cn), 2.4, .6);
+        s.position.set(X3(t.x), 1.5, Z3(t.y));
+        s._cn = cn;
+        scn.add(s);
+        SIGN[i] = s;
+      }
+      if (s._l !== label) {
+        s._l = label;
+        const x = s._cn.getContext('2d');
+        x.clearRect(0, 0, 256, 64);
+        x.fillStyle = 'rgba(25,14,4,.82)';
+        x.strokeStyle = label[0] === '📍' ? '#7fe08a' : '#f0c060';
+        x.lineWidth = 4;
+        x.beginPath();
+        if (x.roundRect) {
+          x.roundRect(4, 6, 248, 52, 14);
+        }
+        else {
+          x.rect(4, 6, 248, 52);
+        }
+        x.fill();
+        x.stroke();
+        x.fillStyle = '#fff';
+        x.textAlign = 'center';
+        let fs = 26;
+        do {
+          x.font = 'bold ' + fs + 'px "Segoe UI", Roboto, Arial, sans-serif';
+          fs -= 2;
+        } while (x.measureText(label).width > 228 && fs > 12);
+        x.fillText(label, 128, 41);
+        s.material.map.needsUpdate = true;
+      }
+      s.visible = true;
+    });
+  }
+
+  // Loa phòng trà: hiện lần lượt, mỗi thông báo 25 giây trên màn LED và khung thông báo
+  function annShow(id, v) {
+    if (!v || !(v.p > 0) || ANN.shown[id] || sNow() - v.p > 30000) {
+      return;
+    }
+    ANN.shown[id] = 1;
+    const ms = Math.max(5000, 25000 - (sNow() - v.p));
+    ANN.cur = { f: v.f, m: v.m, until: performance.now() + ms };
+    let c = $('ann');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'ann';
+      c.style.cssText = 'position:fixed;top:96px;left:50%;transform:translateX(-50%);z-index:58;background:#2a1c06ee;'
+        + 'border:2px solid #f0c060;border-radius:14px;padding:8px 16px;text-align:center;color:#ffe9b0;'
+        + 'pointer-events:none;max-width:88vw;transition:opacity .8s';
+      document.body.appendChild(c);
+    }
+    c.textContent = '';
+    const a = document.createElement('div');
+    a.style.cssText = 'font-size:12px;opacity:.85';
+    a.textContent = '📢 Loa phòng trà · ' + v.f;
+    const b = document.createElement('b');
+    b.style.cssText = 'font-size:17px;color:#fff';
+    b.textContent = v.m;
+    c.append(a, b);
+    c.style.opacity = '1';
+    c.hidden = false;
+    clearTimeout(annShow._t);
+    annShow._t = setTimeout(() => {
+      c.style.opacity = '0';
+    }, ms);
+    addLog({ m: '📢 ' + v.f + ': ' + v.m, s: 1, t: sNow() });
+    AE.bell();
+  }
+  function annTick() {
+    if (document.hidden || !ANN.q.length) {
+      return;
+    }
+    const n = performance.now();
+    if ((ANN.cur && n < ANN.cur.until + 1500) || ANN.busy > n) {
+      return;
+    }
+    ANN.busy = n + 4000;
+    const id = ANN.q[0];
+    setTimeout(() => {
+      db.ref('ann/' + id + '/p').transaction(c => c === 0 || c == null ? sNow() : undefined).catch(() => {});
+    }, Math.random() * 1200);
+  }
+  function svInit() {
+    if (svInit.done) {
+      return;
+    }
+    svInit.done = 1;
+    db.ref('vip').on('value', s => {
+      VIPS = s.val() || {};
+      if (cur === 'svc') {
+        HD.svc();
+      }
+    });
+    db.ref('tbl').on('value', s => {
+      TBL = s.val() || {};
+      signUpdate();
+      if (cur === 'svc') {
+        HD.svc();
+      }
+    });
+    setInterval(signUpdate, 30000);
+    if (acct) {
+      db.ref('annp/' + uid).on('value', s => {
+        ANN.mine = s.val() || {};
+        if (cur === 'svc') {
+          HD.svc();
+        }
+      });
+    }
+    db.ref('ann').orderByChild('p').equalTo(0).on('value', s => {
+      ANN.q = [];
+      s.forEach(x => {
+        ANN.q.push(x.key);
+      });
+    });
+    const q = db.ref('ann').orderByChild('p').startAt(sNow() - 30000);
+    q.on('child_added', s => annShow(s.key, s.val()));
+    q.on('child_changed', s => annShow(s.key, s.val()));
+    setInterval(annTick, 2500);
+  }
+  function svSave() {
+    const t = $('svann');
+    if (t) {
+      SV.ann = t.value;
+    }
+    const s = $('svtb');
+    if (s) {
+      SV.pick = s.value;
+    }
   }
   // ===== TẶNG BÀI HÁT (💌) =====
   // dedics/<mã đơn> = {u, f: người tặng, to: người nhận, m: lời nhắn, k: mã bài | sn+day: bài đặt trước, p: giờ bắt đầu bài khi đã phát}
@@ -2410,6 +2602,9 @@
     if (e.target.id === 'ddk') {
       HD.ddk();
     }
+    else if (e.target.id === 'svtb') {
+      HD.svpick();
+    }
   });
   document.addEventListener('input', e => {
     const k = e.target.dataset.k;
@@ -2757,7 +2952,7 @@
     ? '<p style="color:#f0c060">🙏 Cửa hàng và ủng hộ đang tạm nghỉ, sẽ mở lại ngày 1/1/' + new Date(SH.closed + 7 * 3600e3).getUTCFullYear()
       + '. Cảm ơn mọi người đã đồng hành cùng phòng trà!</p>' : '';
   const money = n => Number(n).toLocaleString('vi-VN') + 'đ';
-  const skuLabel = o => o.sku === 'donate' ? '💝 Ủng hộ' : o.sku === 'dd' ? '🎁 Tặng bài hát' : ((ITEMS.find(x => x[0] === o.sku) || [])[1] || o.sku);
+  const skuLabel = o => o.sku === 'donate' ? '💝 Ủng hộ' : o.sku === 'dd' ? '🎁 Tặng bài hát' : o.sku === 'vip' ? '👑 Thẻ VIP' : o.sku === 'ann' ? '📢 Loa phòng trà' : o.sku === 'tbl' ? '🍾 Bàn riêng' : ((ITEMS.find(x => x[0] === o.sku) || [])[1] || o.sku);
   const ITEMS = [];
   [[ZN, '🎨 Màu tên'], [ZB, '🏷 Huy hiệu'], [ZE, '✨ Hiệu ứng']].forEach(g => g[0].forEach(o => {
     if (o[3]) {
@@ -2828,6 +3023,21 @@
       return;
     }
     SH.adm = true;
+    db.ref('annp').on('value', s => {
+      ANN.pend = [];
+      s.forEach(u => {
+        u.forEach(x => {
+          const v = x.val();
+          if (v && v.s === 0) {
+            ANN.pend.push({ u: u.key, id: x.key, f: v.f, m: v.m });
+          }
+        });
+      });
+      $('annb').textContent = '📢 Duyệt loa' + (ANN.pend.length ? ' 🔴' + ANN.pend.length : '');
+      if (cur === 'annadm') {
+        HD.annadm();
+      }
+    });
     db.ref('dedics').limitToLast(60).on('value', s => {
       DD.all = {};
       s.forEach(x => {
@@ -2899,6 +3109,9 @@
       SH.orders[j.id] = SH.orders[j.id] || { sku, a: j.amount, c: j.code, n: me.n, s: 0, url: j.url };
       if (sku === 'dd') {
         DD.sent = true;
+      }
+      else {
+        SV.sent = true;
       }
       HD.pay(j.id);
     }
@@ -2975,7 +3188,7 @@
           + 'style="display:block;flex:1;text-align:center;padding:10px;border-radius:10px;background:#d4a640;color:#1a1f3a;font-weight:bold;text-decoration:none">'
           + '💳 Mở trang thanh toán payOS</a></div>'
           + '<p class="sm">Số tiền đã được cố định, bạn chỉ cần quét QR và chuyển <b>đúng số tiền</b> đó (tối đa ' + money(SHOP.maxTx) + '/lần). '
-          + 'Chuyển xong, ' + (o.sku === 'dd' ? 'lời tặng tự được gửi lên lịch' : 'vật phẩm tự mở') + ' sau vài giây. Link hết hạn sau 15 phút; đơn chờ hiện trong 🛍 Cửa hàng.</p>'
+          + 'Chuyển xong, ' + (o.sku === 'dd' ? 'lời tặng tự được gửi lên lịch' : o.sku === 'ann' ? 'thông báo được chuyển cho admin duyệt' : o.sku === 'vip' ? 'thẻ VIP tự kích hoạt' : o.sku === 'tbl' ? 'bàn tự được giữ cho bạn' : 'vật phẩm tự mở') + ' sau vài giây. Link hết hạn sau 15 phút; đơn chờ hiện trong 🛍 Cửa hàng.</p>'
           : '<p class="sm" style="color:#ff9a7a">Đơn này chưa có link thanh toán, hãy hủy và tạo lại.</p>')
         + (o.s === 0 ? '<div class="row"><button data-a="ocancel" data-v="' + esc(id) + '">🗑 Hủy đơn này</button></div>' : ''), 'pay');
     },
@@ -3027,6 +3240,26 @@
         if (!ex) {
           up['dedics/' + id] = Object.assign({ u, f: o.n, t: TS() }, o.dd);
         }
+      }
+      else if (o.sku === 'vip') {
+        const cv = (await db.ref('vip/' + u + '/e').once('value')).val() || 0;
+        up['vip/' + u] = { e: Math.max(Date.now() + off, cv) + SHOP.svc.vipDays * 86400e3, n: o.n };
+      }
+      else if (o.sku === 'ann') {
+        if (!o.dd) {
+          return toast('Đơn này thiếu nội dung, hãy kiểm tra payorders trên Firebase');
+        }
+        up['annp/' + u + '/' + id] = { f: o.n, m: o.dd.m, t: TS(), s: 0 };
+      }
+      else if (o.sku === 'tbl') {
+        if (!o.dd) {
+          return toast('Đơn này thiếu thông tin bàn, hãy kiểm tra payorders trên Firebase');
+        }
+        const ct = (await db.ref('tbl/' + o.dd.tid).once('value')).val();
+        if (ct && ct.e > Date.now() + off && ct.u !== u) {
+          return toast('Bàn này đã có người khác giữ, hãy hoàn tiền cho đơn này');
+        }
+        up['tbl/' + o.dd.tid] = { u, f: o.n, e: Date.now() + off + SHOP.svc.tblHours * 3600e3, t: TS() };
       }
       else {
         up['owned/' + u + '/' + o.sku] = true;
@@ -3090,6 +3323,180 @@
     },
     skill(id) {
       useSkill(id);
+    },
+    svc() {
+      svSave();
+      const S = SHOP.svc;
+      const tabs = [['vip', '👑 Thẻ VIP'], ['ann', '📢 Loa'], ['tbl', '🍾 Bàn riêng']];
+      const tab = SV.tab;
+      let h = '<h3>💎 Dịch vụ phòng trà</h3>' + closedMsg() + '<div class="tabs">'
+        + tabs.map(t => '<button data-a="svtab" data-v="' + t[0] + '"' + (tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>').join('') + '</div>';
+      if (!acct) {
+        h += '<p class="sm">Hãy đăng ký hoặc đăng nhập ở màn hình vào phòng để dùng dịch vụ trả phí.</p>';
+      }
+      const inp = 'style="width:100%;padding:8px;border-radius:8px;background:#2a170c;color:inherit"';
+      if (tab === 'vip') {
+        const e = VIPS[uid] && VIPS[uid].e;
+        h += '<p class="sm">' + (vipMe() ? '✅ Thẻ VIP của bạn còn hiệu lực đến <b>' + dmy(e) + '</b>.' : 'Bạn chưa có thẻ VIP.') + '</p>'
+          + '<ul class="sm" style="text-align:left;line-height:1.6">'
+          + '<li>👑 Biển tên viền vàng, có chữ VIP cho mọi người thấy</li>'
+          + '<li>🔔 MC chào mừng riêng khi bạn bước vào phòng trà</li>'
+          + '<li>🛋 Ngồi sofa VIP sát sân khấu mà không cần Cấp 5</li>'
+          + '<li>📢 Loa phòng trà ' + money(S.annVip) + ' (giá thường ' + money(S.ann) + ')</li>'
+          + '<li>🍾 Bàn riêng giảm còn ' + money(S.tblChairVip) + ' / ' + money(S.tblSofaVip) + ' (bàn sofa)</li></ul>'
+          + '<p class="sm">Thẻ VIP chỉ là đặc quyền và trang trí, không bán điểm hay cấp. Mỗi lần mua cộng thêm ' + S.vipDays + ' ngày, có thể gia hạn nối tiếp.</p>'
+          + '<div class="row"><button data-a="svvip" style="width:100%">' + (vipMe() ? '🔁 Gia hạn' : '👑 Mua thẻ VIP') + ' ' + money(S.vip) + ' / ' + S.vipDays + ' ngày</button></div>';
+      }
+      else if (tab === 'ann') {
+        const mine = Object.keys(ANN.mine).sort().reverse().slice(0, 5).map(id => {
+          const v = ANN.mine[id];
+          const st = v.s === 1 ? '✅ đã duyệt, sắp hiện' : v.s === 3 ? '❌ không được duyệt, liên hệ phòng trà để hoàn tiền' : '⏳ đang chờ duyệt';
+          return '<div class="row"><span style="flex:1;text-align:left" class="sm">“' + esc(v.m) + '”<br>' + st + '</span></div>';
+        }).join('');
+        h += '<p class="sm">Gửi một thông báo lên màn LED và khung chữ cho cả phòng thấy trong 25 giây (ví dụ lời chúc sinh nhật, lời mời). '
+          + 'Nội dung được admin duyệt trước khi hiện. Nội dung không phù hợp sẽ bị từ chối và hoàn tiền.</p>'
+          + '<textarea id="svann" maxlength="80" rows="3" placeholder="Nội dung thông báo (tối đa 80 ký tự)" ' + inp + '>' + esc(SV.ann) + '</textarea>'
+          + '<p class="sm">Người gửi hiện là <b>' + esc(me.n) + '</b>.</p>'
+          + '<div class="row"><button data-a="svann" style="width:100%">📢 Thanh toán ' + money(svPrice.ann()) + '</button></div>'
+          + (mine ? '<h4>Loa của bạn</h4>' + mine : '');
+      }
+      else {
+        const my = myTbl();
+        if (my) {
+          const i = +my[0].slice(1);
+          const g = my[1].g || {};
+          const who = Object.keys(PR).filter(u => u !== uid).sort((a, b) => (PR[a].n || '').localeCompare(PR[b].n || ''));
+          h += '<p class="sm">🍾 Bạn đang giữ <b>' + tblName(i) + '</b> đến <b>' + hm(my[1].e) + '</b>. Chỉ bạn và những người bạn mời mới ngồi được.</p>'
+            + '<h4>Mời người đang trong phòng</h4>'
+            + (who.length ? who.map(u => '<div class="row"><span style="flex:1;text-align:left">' + (g[u] ? '✅ ' : '') + esc(PR[u].n || 'Khách') + '</span>'
+              + '<button data-a="svinv" data-v="' + esc(u) + '">' + (g[u] ? 'Bỏ mời' : 'Mời') + '</button></div>').join('')
+              : '<p class="sm">Chưa có ai khác trong phòng.</p>')
+            + '<p class="sm">Tối đa 8 người được mời. Ai đang ngồi sẵn ở bàn lúc bạn đặt sẽ không bị mời đi.</p>';
+        }
+        else {
+          const now = sNow();
+          const opts = TABLES.map((t, i) => {
+            const r = TBL['t' + i];
+            const busy = r && r.e > now;
+            return '<option value="t' + i + '"' + (SV.pick === 't' + i ? ' selected' : '') + (busy ? ' disabled' : '') + '>'
+              + tblName(i) + (busy ? ' (đã đặt đến ' + hm(r.e) + ')' : ' · ' + money(svPrice.tbl(i))) + '</option>';
+          }).join('');
+          h += '<p class="sm">Giữ riêng một bàn trong <b>' + S.tblHours + ' giờ</b> cho bạn và bạn bè. Người lạ không ngồi được, trên bàn hiện biển tên của bạn. '
+            + 'Hãy chọn bàn còn trống ghế, vì ai đang ngồi sẵn sẽ không bị mời đi. Mỗi người giữ một bàn một lúc.</p>'
+            + '<select id="svtb" ' + inp + '><option value="">Chọn bàn...</option>' + opts + '</select>'
+            + '<p class="sm" id="svtp"></p>'
+            + '<div class="row"><button data-a="svtbl" style="width:100%">🍾 Thanh toán và giữ bàn</button></div>';
+        }
+      }
+      panel(h, 'svc');
+      HD.svpick();
+    },
+    svpick() {
+      const e = $('svtb');
+      const p = $('svtp');
+      if (!e) {
+        return;
+      }
+      SV.pick = e.value;
+      signUpdate();
+      if (p) {
+        p.textContent = e.value ? 'Bàn đang chọn được đánh dấu 📍 trong phòng. Giá: ' + money(svPrice.tbl(+e.value.slice(1))) + '.' : '';
+      }
+    },
+    svtab(v) {
+      svSave();
+      SV.tab = v;
+      if (v !== 'tbl') {
+        SV.pick = '';
+        signUpdate();
+      }
+      HD.svc();
+    },
+    svvip() {
+      mkOrder('vip', SHOP.svc.vip).then(() => {
+        SV.sent = false;
+      });
+    },
+    svann() {
+      svSave();
+      const m = SV.ann.trim();
+      if (!m) {
+        return toast('Hãy nhập nội dung thông báo');
+      }
+      mkOrder('ann', svPrice.ann(), { dd: { m } }).then(() => {
+        if (SV.sent) {
+          SV.sent = false;
+          SV.ann = '';
+        }
+      });
+    },
+    svtbl() {
+      svSave();
+      if (!/^t\d+$/.test(SV.pick || '')) {
+        return toast('Hãy chọn một bàn');
+      }
+      mkOrder('tbl', svPrice.tbl(+SV.pick.slice(1)), { dd: { tid: SV.pick } }).then(() => {
+        SV.sent = false;
+      });
+    },
+    svinv(u) {
+      const my = myTbl();
+      if (!my) {
+        return;
+      }
+      const has = !!(my[1].g && my[1].g[u]);
+      if (!has && Object.keys(my[1].g || {}).length >= 8) {
+        return toast('Tối đa 8 người được mời');
+      }
+      db.ref('tbl/' + my[0] + '/g/' + u).set(has ? null : true).catch(() => toast('Không mời được, thử lại nhé'));
+    },
+    annadm() {
+      if (!isAdmin) {
+        return;
+      }
+      const now = sNow();
+      const rv = Object.keys(TBL).filter(k => TBL[k].e > now);
+      const vp = Object.keys(VIPS).filter(u => VIPS[u].e > now);
+      panel('<h3>📢 Duyệt loa phòng trà</h3><p class="sm">Đã thanh toán, chờ bạn duyệt. Từ chối thì hoàn tiền cho người gửi qua payOS.</p>'
+        + (ANN.pend.length ? ANN.pend.map(r => '<div class="row" style="flex-wrap:wrap"><span style="flex:1;text-align:left;min-width:100%"><b>' + esc(r.f) + '</b>: “' + esc(r.m) + '”</span>'
+          + '<button data-a="annok" data-v="' + esc(r.u + '|' + r.id) + '">✅ Duyệt</button>'
+          + '<button data-a="annedit" data-v="' + esc(r.u + '|' + r.id) + '">✏ Sửa</button>'
+          + '<button data-a="annno" data-v="' + esc(r.u + '|' + r.id) + '">❌ Từ chối</button></div>').join('')
+          : '<p class="sm">Không có loa nào chờ duyệt.</p>')
+        + '<h4>🍾 Bàn đang được giữ</h4>'
+        + (rv.length ? rv.map(k => '<div class="row"><span style="flex:1;text-align:left" class="sm">' + tblName(+k.slice(1)) + ' · ' + esc(TBL[k].f) + ' · đến ' + hm(TBL[k].e) + '</span>'
+          + '<button data-a="tbldel" data-v="' + k + '">Hủy</button></div>').join('') : '<p class="sm">Không có bàn nào.</p>')
+        + '<h4>👑 Thẻ VIP còn hạn: ' + vp.length + '</h4>'
+        + vp.map(u => '<div class="row"><span style="flex:1;text-align:left" class="sm">' + esc(VIPS[u].n || u.slice(0, 6)) + ' · đến ' + dmy(VIPS[u].e) + '</span></div>').join(''), 'annadm');
+    },
+    annok(v) {
+      const [u, id] = v.split('|');
+      const r = ANN.pend.find(x => x.id === id && x.u === u);
+      if (isAdmin && r) {
+        db.ref().update({
+          ['ann/' + id]: { u, f: r.f, m: r.m, t: TS(), p: 0 },
+          ['annp/' + u + '/' + id + '/s']: 1
+        }).then(() => toast('Đã duyệt, thông báo sẽ hiện khi có người trong phòng')).catch(() => toast('Lỗi, thử lại'));
+      }
+    },
+    annedit(v) {
+      const [u, id] = v.split('|');
+      const r = ANN.pend.find(x => x.id === id && x.u === u);
+      const m = r && prompt('Sửa nội dung (tối đa 80 ký tự):', r.m);
+      if (isAdmin && m && m.trim()) {
+        db.ref('annp/' + u + '/' + id + '/m').set(m.trim().slice(0, 80));
+      }
+    },
+    annno(v) {
+      const [u, id] = v.split('|');
+      if (isAdmin && confirm('Từ chối loa này? Nhớ hoàn tiền cho người gửi.')) {
+        db.ref('annp/' + u + '/' + id + '/s').set(3);
+      }
+    },
+    tbldel(k) {
+      if (isAdmin && confirm('Hủy việc giữ bàn này? Nhớ hoàn tiền nếu cần.')) {
+        db.ref('tbl/' + k).remove();
+      }
     },
     guide() {
       if (window.openGuide) {
@@ -3494,6 +3901,37 @@
   const ledX = ledC.getContext('2d');
   const ledTex = new THREE.CanvasTexture(ledC);
   let ledK = -1;
+  function drawAnn() {
+    const A = ANN.cur;
+    ledX.fillStyle = 'rgba(30,18,4,.82)';
+    ledX.fillRect(0, 0, 256, 128);
+    ledX.textAlign = 'center';
+    ledX.shadowColor = '#f0c060';
+    ledX.shadowBlur = 6;
+    ledX.fillStyle = '#f0c060';
+    ledX.font = 'bold 12px sans-serif';
+    ledX.fillText('📢 LOA PHÒNG TRÀ', 128, 20);
+    ledX.fillStyle = '#ffffff';
+    ledX.font = 'bold 15px sans-serif';
+    let ln = '';
+    const out = [];
+    A.m.split(' ').forEach(wd => {
+      if (ln && ledX.measureText(ln + ' ' + wd).width > 236) {
+        out.push(ln);
+        ln = wd;
+      }
+      else {
+        ln = ln ? ln + ' ' + wd : wd;
+      }
+    });
+    out.push(ln);
+    out.slice(0, 4).forEach((s, i) => ledX.fillText(s, 128, 50 + i * 20));
+    ledX.fillStyle = '#ffe9b0';
+    ledX.font = '12px sans-serif';
+    ledX.fillText('— ' + A.f + ' —', 128, 120);
+    ledX.shadowBlur = 0;
+    ledX.textAlign = 'start';
+  }
   function drawDed() {
     const wrap = (txt, w) => {
       let ln = '';
@@ -3559,7 +3997,10 @@
       ledX.stroke();
     }
     ledX.globalAlpha = 1;
-    if (DED) {
+    if (ANN.cur && performance.now() < ANN.cur.until) {
+      drawAnn();
+    }
+    else if (DED) {
       if (performance.now() < DED.until) {
         drawDed();
       }
@@ -5093,9 +5534,10 @@
     const lv = (lvl(sc) > 1 ? 'Cấp ' + lvl(sc) + ' · ' : '') + lvn(sc);
     const fr = !isMe && p.k && FR.list[p.k] ? '💛 ' : '';
     const z = zp(isMe ? me.z : p.z);
-    const nm = (!isMe || zCan(ZB[z[1]]) ? ZB[z[1]][2] : '') + fr + p.n;
-    const col = (!isMe || zCan(ZN[z[0]])) && ZN[z[0]][2] ? ZN[z[0]][2] : (isMe ? '#ffd27a' : '#f3e3c3');
-    const key = nm + '|' + lv + '|' + col;
+    const vp = vipU(isMe ? uid : p.k);
+    const nm = (vp ? '👑 ' : '') + (!isMe || zCan(ZB[z[1]]) ? ZB[z[1]][2] : '') + fr + p.n;
+    const col = (!isMe || zCan(ZN[z[0]])) && ZN[z[0]][2] ? ZN[z[0]][2] : (vp ? '#ffe27a' : isMe ? '#ffd27a' : '#f3e3c3');
+    const key = nm + '|' + lv + '|' + col + (vp ? '|vip' : '');
     if (p._k === key) {
       return;
     }
@@ -5104,7 +5546,7 @@
     x.clearRect(0, 0, 256, 96);
     x.textAlign = 'center';
     x.lineWidth = 5;
-    x.strokeStyle = '#000';
+    x.strokeStyle = vp ? '#7a5200' : '#000';
     let fs = 30;
     do {
       x.font = 'bold ' + fs + 'px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
@@ -5122,8 +5564,12 @@
     x.fillText(nm, 128, 42);
     x.font = '22px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
     x.fillStyle = '#c9a56a';
-    x.strokeText(lv, 128, 78);
-    x.fillText(lv, 128, 78);
+    const lvt = (vp ? 'VIP · ' : '') + lv;
+    if (vp) {
+      x.fillStyle = '#ffd24a';
+    }
+    x.strokeText(lvt, 128, 78);
+    x.fillText(lvt, 128, 78);
     o.lb.material.map.needsUpdate = true;
   }
   function rm(p) {
@@ -7194,15 +7640,17 @@
       return { sd, d: Math.hypot(cx - q[0], cy - q[1]) };
     }).filter(v => v.d < reach).sort((u, v) => u.d - v.d);
     if (near.length) {
-      const free = near.find(v => !taken(v.sd) && !vipLocked(v.sd));
+      const free = near.find(v => !taken(v.sd) && !vipLocked(v.sd) && !resvBlock(v.sd));
       if (free) {
         AE.seat();
         return goto(free.sd.x, free.sd.y);
       }
       if (near[0].d < 36) {
-        return toast(vipLocked(near[0].sd)
-          ? '🛋 Sofa VIP sát sân khấu dành cho Cấp 5 trở lên'
-          : 'Chỗ này có người ngồi rồi');
+        return toast(resvBlock(near[0].sd)
+          ? '🍾 Bàn này được ' + resvOf(near[0].sd).f + ' đặt riêng đến ' + hm(resvOf(near[0].sd).e)
+          : vipLocked(near[0].sd)
+            ? '🛋 Sofa VIP sát sân khấu dành cho Cấp 5 trở lên hoặc khách có thẻ VIP'
+            : 'Chỗ này có người ngồi rồi');
       }
     }
     if (!rc.ray.intersectPlane(pl, hit)) {
@@ -7210,13 +7658,13 @@
     }
     goto(Math.round(hit.x * 40 + W / 2), Math.round(hit.z * 40 + H / 2));
   }
-  const vipLocked = sd => sd.sh === .58 && lvl(score) < 5 && !amAdmin;
+  const vipLocked = sd => sd.sh === .58 && lvl(score) < 5 && !amAdmin && !vipMe() && !resvOf(sd);
   function sitToggle() {
     const cur0 = SEATS.find(sd => Math.hypot(sd.x - me.x, sd.y - me.y) < 48);
     if (cur0) {
       return goto(cur0.stool ? cur0.x + 80 : cur0.x, cur0.stool ? cur0.y : cur0.y + 80);
     }
-    const c = SEATS.filter(sd => !taken(sd) && !vipLocked(sd))
+    const c = SEATS.filter(sd => !taken(sd) && !vipLocked(sd) && !resvBlock(sd))
       .sort((u, v) => Math.hypot(u.x - me.x, u.y - me.y) - Math.hypot(v.x - me.x, v.y - me.y))[0];
     if (!c) {
       return toast('Hiện chưa còn chỗ trống phù hợp');

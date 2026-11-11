@@ -7,6 +7,13 @@ const PRICES = {
 const DD_PRICE = 20000;      // giá một lời tặng bài hát
 const DD_MIN_DAYS = 2;       // bài chưa có trong danh sách phải đặt trước ít nhất 2 ngày
 const DD_MAX_DAYS = 90;
+// Dịch vụ trả phí (khớp với SHOP.svc trong shop-config.js)
+const SVC = {
+  vip: 49000, vipDays: 30, vipMaxDays: 90,
+  ann: 10000, annVip: 8000,
+  tblChair: 15000, tblSofa: 25000, tblChairVip: 10000, tblSofaVip: 18000, tblHours: 2
+};
+const TBL_RE = /^t([0-9]|1[0-9])$/;      // t0..t4 = bàn sofa sát sân khấu, t5..t19 = bàn thường
 const PAYOS = 'https://api-merchant.payos.vn';
 const LINK_TTL = 15 * 60;
 
@@ -146,6 +153,9 @@ async function verifyUser(env, idToken) {
   return u && u.email ? u.localId : null;
 }
 
+async function vipExp(env, uid) {
+  return +(await dbGet(env, 'vip/' + uid + '/e')) || 0;
+}
 async function createOrder(req, env, h) {
   const idToken = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
   const uid = idToken && await verifyUser(env, idToken);
@@ -193,6 +203,44 @@ async function createOrder(req, env, h) {
       }
     }
   }
+  else if (sku === 'vip') {
+    const e = await vipExp(env, uid);
+    if (e - Date.now() > (SVC.vipMaxDays - SVC.vipDays) * 86400e3) {
+      return json({ error: 'Thẻ VIP của bạn còn hơn ' + (SVC.vipMaxDays - SVC.vipDays) + ' ngày, hãy gia hạn sau nhé' }, 400, h);
+    }
+    amount = SVC.vip;
+  }
+  else if (sku === 'ann') {
+    const m = clean((body.dd || {}).m, 80);
+    if (!m) {
+      return json({ error: 'Hãy nhập nội dung thông báo' }, 400, h);
+    }
+    dd = { m };
+    amount = (await vipExp(env, uid)) > Date.now() ? SVC.annVip : SVC.ann;
+  }
+  else if (sku === 'tbl') {
+    const tid = clean((body.dd || {}).tid, 4);
+    if (!TBL_RE.test(tid)) {
+      return json({ error: 'Bàn không hợp lệ' }, 400, h);
+    }
+    const now = Date.now();
+    const all = (await dbGet(env, 'tbl')) || {};
+    const hold = (await dbGet(env, 'tblhold')) || {};
+    if (all[tid] && all[tid].e > now) {
+      return json({ error: 'Bàn này đang được đặt riêng, hãy chọn bàn khác' }, 400, h);
+    }
+    if (hold[tid] && hold[tid].e > now && hold[tid].u !== uid) {
+      return json({ error: 'Bàn này đang chờ người khác thanh toán, thử lại sau vài phút' }, 400, h);
+    }
+    if (Object.values(all).some(r => r.u === uid && r.e > now)) {
+      return json({ error: 'Bạn đang giữ một bàn riêng rồi, hãy đợi hết giờ nhé' }, 400, h);
+    }
+    const sofa = +tid.slice(1) < 5;
+    const vip = (await vipExp(env, uid)) > now;
+    amount = sofa ? (vip ? SVC.tblSofaVip : SVC.tblSofa) : (vip ? SVC.tblChairVip : SVC.tblChair);
+    dd = { tid };
+    var holdKey = 'tblhold/' + tid;
+  }
   else if (PRICES[sku]) {
     amount = PRICES[sku];
   }
@@ -207,7 +255,7 @@ async function createOrder(req, env, h) {
   if (rev + amount > cap) {
     return json({ error: 'Phòng trà tạm nghỉ nhận thêm trong năm nay, cảm ơn bạn 🙏' }, 403, h);
   }
-  if (sku !== 'donate' && sku !== 'dd' && (await dbGet(env, 'owned/' + uid + '/' + sku))) {
+  if (sku !== 'donate' && sku !== 'dd' && sku !== 'vip' && sku !== 'ann' && sku !== 'tbl' && (await dbGet(env, 'owned/' + uid + '/' + sku))) {
     return json({ error: 'Bạn đã sở hữu vật phẩm này' }, 400, h);
   }
   const mine = (await dbGet(env, 'orders/' + uid)) || {};
@@ -221,7 +269,8 @@ async function createOrder(req, env, h) {
   const ts = { '.sv': 'timestamp' };
   await dbPatch(env, {
     ['orders/' + uid + '/' + orderCode]: Object.assign({ sku, a: amount, c: code, n: name, t: ts, s: 0, url: pay.checkoutUrl }, dd ? { dd } : {}),
-    ['payorders/' + orderCode]: Object.assign({ u: uid, sku, a: amount, n: name, t: ts, st: 0 }, dd ? { dd } : {})
+    ['payorders/' + orderCode]: Object.assign({ u: uid, sku, a: amount, n: name, t: ts, st: 0 }, dd ? { dd } : {}),
+    ...(holdKey ? { [holdKey]: { u: uid, e: Date.now() + 12 * 60e3 } } : {})
   });
   return json({ id: String(orderCode), url: pay.checkoutUrl, amount, code }, 200, h);
 }
@@ -268,6 +317,31 @@ async function webhook(req, env) {
       // admin xác nhận tay trước đó có thể đã tạo lời tặng rồi: không ghi đè (giữ nguyên dấu "đã phát")
       if (rec.dd && !(await dbGet(env, 'dedics/' + oc))) {
         up['dedics/' + oc] = Object.assign({ u: rec.u, f: rec.n, t: { '.sv': 'timestamp' } }, rec.dd);
+      }
+    }
+    else if (rec.sku === 'vip') {
+      // admin xác nhận tay trước đó đã cộng hạn dùng rồi thì không cộng lần nữa
+      if (!manual) {
+        const e = Math.max(Date.now(), await vipExp(env, rec.u));
+        up['vip/' + rec.u] = { e: e + SVC.vipDays * 86400e3, n: rec.n };
+      }
+    }
+    else if (rec.sku === 'ann') {
+      if (!manual && rec.dd) {
+        // chờ admin duyệt rồi mới hiện lên màn LED
+        up['annp/' + rec.u + '/' + oc] = { f: rec.n, m: rec.dd.m, t: { '.sv': 'timestamp' }, s: 0 };
+      }
+    }
+    else if (rec.sku === 'tbl') {
+      if (!manual && rec.dd) {
+        const cur = await dbGet(env, 'tbl/' + rec.dd.tid);
+        if (cur && cur.e > Date.now() && cur.u !== rec.u) {
+          up['orders/' + rec.u + '/' + oc + '/err'] = 'Bàn đã có người đặt trước, vui lòng liên hệ phòng trà để được hoàn tiền';
+        }
+        else {
+          up['tbl/' + rec.dd.tid] = { u: rec.u, f: rec.n, e: Date.now() + SVC.tblHours * 3600e3, t: { '.sv': 'timestamp' } };
+          up['tblhold/' + rec.dd.tid] = null;
+        }
       }
     }
     else {
