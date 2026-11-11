@@ -389,7 +389,7 @@
         "g": {
           "$g": {
             ".write": "auth != null && data.parent().parent().child('u').val() === auth.uid && data.parent().parent().child('e').val() > now",
-            ".validate": "newData.val() === true && newData.parent().numChildren() <= 8"
+            ".validate": "newData.val() === true"
           }
         }
       }
