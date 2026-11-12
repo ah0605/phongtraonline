@@ -866,11 +866,12 @@
     document.querySelectorAll('[data-lv]').forEach(b => {
       b.hidden = lvl(score) < +b.dataset.lv;
     });
-    $('score').textContent = '⭐ Cấp ' + lvl(score) + ' · 🍃 ' + score + '/' + lvNext(score) + ' điểm · ' + lvn(score);
+    $('score').textContent = '⭐ Cấp ' + lvl(score) + ' • ' + score + '/' + lvNext(score) + ' điểm • ' + lvn(score);
   };
   const cnt = () => {
     const n = Math.max(Object.keys(PR).length, Object.keys(P).length + 1);
-    $('cnt').textContent = '● ' + n + '/' + MAX + ' · 🎧 ' + (Object.keys(P).length + 1);
+    $('cnt').textContent = '● ' + n;
+    $('cnt').title = n + '/' + MAX + ' khách trong phòng trà, ' + (Object.keys(P).length + 1) + ' người cùng phòng đang nghe';
     $('cnt').style.color = n >= MAX ? '#ff9a7a' : n >= MAX * .85 ? '#f0c060' : '#7fe08a';
   };
   let acct = false;
@@ -2154,6 +2155,10 @@
     });
     mission('chat');
   }
+  $('cs').onclick = () => {
+    chat();
+    $('ci').focus();
+  };
   $('ci').onkeydown = e => {
     if (e.key === 'Enter') {
       chat();
@@ -2164,10 +2169,13 @@
     e.stopPropagation();
   };
   addEventListener('keydown', e => {
-    if (!uid || document.activeElement === $('ci') || !$('pn').hidden) {
+    if (!uid || document.activeElement === $('ci') || !$('pn').hidden || !$('mm').hidden) {
       return;
     }
     const k = e.key.toLowerCase();
+    if (k === 'm') {
+      return HD.mm();
+    }
     if (k === 'enter') {
       $('ci').focus();
       e.preventDefault();
@@ -2608,6 +2616,23 @@
     const b = e.target.closest('[data-a]');
     if (b && HD[b.dataset.a]) {
       HD[b.dataset.a](b.dataset.v);
+    }
+  });
+  // Menu tính năng: bấm một mục hoặc vùng tối bên ngoài thì đóng menu
+  document.addEventListener('click', e => {
+    const m = $('mm');
+    if (!m.hidden && (e.target === m || e.target.id === 'mmx' || e.target.closest('#mm button[data-a]'))) {
+      m.hidden = true;
+    }
+  });
+  new MutationObserver(() => {
+    // chấm đỏ trên nút Menu khi có mục cần chú ý (điểm danh, lời mời kết bạn, đơn mới...)
+    const need = [...$('mm').querySelectorAll('button')].some(b => !b.hidden && b.textContent.includes('🔴'));
+    $('mmb').classList.toggle('dot', need);
+  }).observe($('mm'), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !$('mm').hidden) {
+      $('mm').hidden = true;
     }
   });
   document.addEventListener('change', e => {
@@ -3319,6 +3344,15 @@
     DD.day = g('dday') != null ? g('dday') : DD.day;
   }
   Object.assign(HD, {
+    mm() {
+      const m = $('mm');
+      m.hidden = !m.hidden;
+      if (!m.hidden) {
+        m.querySelectorAll('.mg').forEach(g => {
+          g.hidden = !g.querySelector('button:not([hidden])');
+        });
+      }
+    },
     skills() {
       const L = lvl(score);
       const row = s => {

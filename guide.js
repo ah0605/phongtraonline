@@ -12,17 +12,17 @@
       ic: '🚶', t: 'Di chuyển và xoay camera',
       p: ['Máy tính: bấm vào sàn để nhân vật tự đi tới, hoặc dùng phím WASD / mũi tên. Kéo chuột để xoay, cuộn chuột để zoom.',
         'Điện thoại: chạm sàn để đi, giữ ngón tay ở nửa trái màn hình để hiện joystick, kéo nửa phải để xoay, chụm hai ngón để zoom.',
-        'Nhấn Enter để chat với mọi người trong phòng.']
+        'Nhấn Enter để chat với mọi người trong phòng. Bấm nút ☰ Menu (hoặc phím M) để mở tất cả tính năng: sân khấu, nhiệm vụ, cửa hàng, cài đặt...']
     },
     {
       ic: '☕', t: 'Ngồi, gọi nước, nhấp trà',
       p: ['Bấm 🪑 Ngồi / Đứng khi đứng gần một ghế để ngồi xuống thưởng thức chương trình.',
-        'Bấm vào nhân viên ở quầy hoặc nút 📋 Gọi nước để chọn đồ uống, sau đó bấm ☕ Nhấp trà (hoặc phím E) để nhấp một ngụm.',
-        'Dùng các nút 👋 Vẫy tay, 🥂 Nâng ly, ❤️ để chào hỏi. Lên cấp sẽ mở thêm nhiều biểu cảm mới.']
+        'Bấm vào nhân viên ở quầy hoặc nút 🥤 Gọi nước để chọn đồ uống, sau đó bấm 🍵 Nhấp trà (hoặc phím E) để nhấp một ngụm.',
+        'Dùng các nút 👋 Vẫy tay, 🍻 Nâng ly, ❤️ Thả tim để chào hỏi. Lên cấp sẽ mở thêm biểu cảm mới trong ☰ Menu.']
     },
     {
       ic: '🎤', t: 'Nghe nhạc và tương tác sân khấu',
-      p: ['Ca sĩ biểu diễn theo 🗓 Lịch diễn, mọi người nghe cùng một bài cùng một lúc. Bấm 👏 Vỗ tay hoặc 💐 Tặng hoa để cổ vũ.',
+      p: ['Ca sĩ biểu diễn theo 🗓 Lịch diễn, mọi người nghe cùng một bài cùng một lúc. Bấm 👏 Vỗ tay để cổ vũ, hoặc mở ☰ Menu để 💐 Tặng hoa.',
         '🎶 Xin bài & bình chọn: chọn bài bạn muốn nghe, bài được nhiều người chọn sẽ được chèn vào sau bài đang hát.',
         '💌 Tặng bài hát (' + price + '/bài): chọn bài có sẵn hoặc đặt bài trước ít nhất 2 ngày, kèm lời nhắn cho người thân. Khi bài phát, tên người nhận và lời nhắn hiện trên màn LED và được MC đọc lên.']
     },

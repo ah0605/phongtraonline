@@ -94,36 +94,9 @@ h2,h3,h4 {
   background:#c9a227;
   color:#0b1530
 }
-#top {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;
-  background: linear-gradient(#000a,#0000);
-  font-size: 14px;
-  pointer-events: none;
-  z-index:2
-}
-#chat {
-  position: fixed;
-  left: 8px;
-  bottom: calc(env(safe-area-inset-bottom,0px) + 62px);
-  width: min(340px,92vw);
-  z-index:2
-}
-#log {
-  max-height: 130px;
-  overflow-y: auto;
-  font-size: 13px;
-  background: #0008;
-  border-radius: 10px;
-  padding: 6px;
-  margin-bottom:4px
-}
+
+
+
 #log div {
   margin: 2px 0;
   word-break:break-word
@@ -134,18 +107,7 @@ h2,h3,h4 {
 #log b {
   color:#e6c35c
 }
-#bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 8px 8px calc(env(safe-area-inset-bottom,0px) + 8px);
-  background: #000b;
-  z-index:3
-}
+
 #pn {
   position: fixed;
   inset: 0;
@@ -210,20 +172,8 @@ h2,h3,h4 {
   font-size: 18px;
   line-height: 1;
 }
-#xp {
-  height: 5px;
-  border-radius: 3px;
-  background: #0008;
-  margin-top: 3px;
-  overflow: hidden;
-}
-#xpf {
-  display: block;
-  height: 100%;
-  width: 0;
-  background: linear-gradient(90deg, #f0c060, #ff9a4a);
-  transition: width .6s;
-}
+
+
 #lvup {
   position: fixed;
   inset: 0;
@@ -420,6 +370,60 @@ h2,h3,h4 {
 #guide .gnav button:disabled { opacity: .35; cursor: default }
 #guide .gnext { background: #c9a227; color: #0b1530; font-weight: 700 }
 #guide .gskip { margin-top: 10px; background: none; border: none; font-size: 12px; opacity: .6; text-decoration: underline }
+#mm { position: fixed; inset: 0; z-index: 8; background: #000a; display: flex; align-items: flex-end; justify-content: center }
+#mm[hidden], #mm [hidden] { display: none }
+#mm .mc { background: #0d1a36; border: 1px solid #c9a227; border-radius: 16px 16px 0 0; width: min(560px,100%); max-height: 88vh; overflow: auto; padding: 12px 14px calc(env(safe-area-inset-bottom,0px) + 14px) }
+@media (min-width: 700px) { #mm { align-items: center } #mm .mc { border-radius: 16px } }
+#mm .mh { display: flex; justify-content: space-between; align-items: center; font-size: 18px; color: #f0c060 }
+#mm h4 { margin: 14px 0 6px; font-size: 13px; color: #f0c060; opacity: .9 }
+#mm .mgr { display: grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap: 8px }
+#mm .mgr button { border-radius: 12px; text-align: left; white-space: normal; padding: 10px 12px }
+
+
+
+/* ===== Giao diện HUD kiểu mới: ô thông tin hai góc trên, thanh nút nổi giữa dưới, chat và Menu ở góc trái ===== */
+#top { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: calc(env(safe-area-inset-top,0px) + 10px) 12px 0; font-size: 14px; pointer-events: none; z-index: 2 }
+.pill { pointer-events: auto; position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid #ffffff22; background: rgba(12,10,8,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: #fff; font-size: 14px; white-space: nowrap }
+.pill:hover { background: rgba(30,24,18,.72) }
+.pill .hb { color: #f0c060; font-size: 17px; line-height: 1 }
+.pill .sp { opacity: .5; font-style: normal }
+#xp { position: absolute; left: 14px; right: 14px; bottom: 3px; height: 3px; border-radius: 2px; background: #ffffff22; overflow: hidden }
+#xpf { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f0c060, #ff9a4a); transition: width .6s }
+#chat { position: fixed; left: 8px; bottom: calc(env(safe-area-inset-bottom,0px) + 62px); width: clamp(200px, calc(50vw - 298px), 340px); z-index: 2 }
+#log { max-height: 130px; overflow-y: auto; font-size: 13px; background: rgba(12,10,8,.55); border-radius: 10px; padding: 6px; margin-bottom: 6px }
+#chat .cw { position: relative }
+#chat input { padding: 9px 38px 9px 10px; border-radius: 10px; background: #0f2252; border-color: #3d5aa0 }
+#cs { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); padding: 6px 9px; border: none; background: none; color: #9fb4e8; font-size: 15px }
+#mmb { position: fixed; left: 8px; bottom: calc(env(safe-area-inset-bottom,0px) + 12px); z-index: 3; background: #c9a227; color: #0b1530; font-weight: 700; padding: 9px 16px }
+#bar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom,0px) + 14px); transform: translateX(-50%); display: flex; align-items: stretch; gap: 8px; max-width: calc(100vw - 16px); overflow-x: auto; padding: 9px 10px; border-radius: 22px; background: rgba(34,24,18,.55); border: 1px solid rgba(240,192,96,.35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 3; scrollbar-width: none }
+#bar::-webkit-scrollbar { display: none }
+#bar .dv { width: 1px; background: #ffffff22; margin: 4px 2px; flex: none }
+.dk { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 64px; padding: 8px 8px 7px; border-radius: 14px; border: 1px solid #c9a22788; background: rgba(60,42,32,.72); white-space: nowrap }
+.dk b { font-size: 26px; line-height: 1; font-weight: 400 }
+.dk span { font-size: 12px }
+.dk.ac { background: #1b3a7c; border-color: #4a73c4 }
+.dk.ac:hover { background: #24499a }
+.dk:hover { filter: brightness(1.15) }
+.dk:active { transform: scale(.96) }
+@media (max-width: 999px) {
+  #chat { width: calc(100vw - 112px); bottom: calc(env(safe-area-inset-bottom,0px) + 100px) }
+  #mmb { left: auto; right: 8px; bottom: calc(env(safe-area-inset-bottom,0px) + 106px) }
+  .dk { min-width: 58px; padding: 7px 6px 6px }
+  .dk b { font-size: 23px }
+}
+#lvb { min-width: 0; flex: 0 1 auto }
+#score { overflow: hidden; text-overflow: ellipsis }
+@media (max-width: 520px) {
+  #top { padding-left: 8px; padding-right: 8px }
+  .pill { padding: 7px 11px; font-size: 12.5px; gap: 5px }
+  .pill .lb { display: none }
+  #bar { gap: 4px; padding: 7px 6px }
+  #bar .dv { margin: 4px 0 }
+  .dk { min-width: 0; padding: 6px 5px 5px }
+  .dk b { font-size: 21px }
+  .dk span { font-size: 10.5px; white-space: normal; max-width: 54px; text-align: center; line-height: 1.1 }
+}
+#mmb.dot::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff3b3b; margin-left: 6px }
 </style>
 </head>
 <body>
@@ -453,47 +457,68 @@ h2,h3,h4 {
 </div></div>
 <div id="ui" hidden>
   <div id="top">
-    <div>🏮 Phòng trà · <b id="cnt" style="color:#7fe08a">● 1</b> online<span id="adm"></span></div>
-    <div>
-      <div id="score"></div>
+    <button type="button" class="pill" id="rmb" data-a="plist" title="Chọn phòng và danh sách phát"><span class="hb">☰</span><span class="lb">Phòng trà</span><i class="sp lb">·</i><b id="cnt" style="color:#7fe08a">● 1</b><span class="lb">online</span><span id="adm"></span></button>
+    <button type="button" class="pill" id="lvb" data-a="levels" title="Xem cấp và quà">
+      <span id="score"></span>
       <div id="xp"><i id="xpf"></i></div>
+    </button>
+  </div>
+  <div id="chat"><div id="log"></div><div class="cw"><input id="ci" maxlength="140" placeholder="Nhấn Enter để chat…" autocomplete="off"><button type="button" id="cs" aria-label="Gửi">➤</button></div></div>
+  <button type="button" id="mmb" data-a="mm">☰ Menu</button>
+  <div id="mm" hidden>
+    <div class="mc" role="dialog" aria-label="Menu">
+      <div class="mh"><b>☰ Menu</b><button type="button" id="mmx" aria-label="Đóng menu">✕</button></div>
+      <section class="mg"><h4>🎭 Biểu cảm và cổ vũ</h4><div class="mgr">
+        <button data-a="stg" data-v="💐">💐 Tặng hoa</button>
+        <button data-a="emo" data-v="😍" data-lv="3" hidden>😍 Mê mẩn (Cấp 3)</button>
+        <button data-a="emo" data-v="🎉" data-lv="5" hidden>🎉 Ăn mừng (Cấp 5)</button>
+        <button data-a="emo" data-v="🌸" data-lv="8" hidden>🌸 Hoa anh đào (Cấp 8)</button>
+        <button data-a="emo" data-v="👑" data-lv="12" hidden>👑 Vương giả (Cấp 12)</button>
+      </div></section>
+      <section class="mg"><h4>🎤 Sân khấu</h4><div class="mgr">
+        <button data-a="req">🎶 Xin bài & bình chọn</button>
+        <button data-a="ded">💌 Tặng bài hát</button>
+        <button data-a="lineup">🗓 Lịch diễn</button>
+        <button data-a="plist">🎧 Danh sách phát</button>
+      </div></section>
+      <section class="mg"><h4>🎮 Tiến trình</h4><div class="mgr">
+        <button data-a="checkin" id="ckb">📅 Điểm danh</button>
+        <button data-a="quest">📜 Nhiệm vụ</button>
+        <button data-a="levels">⭐ Cấp & quà</button>
+        <button data-a="skills">✨ Kỹ năng</button>
+        <button data-a="rank">🏆 Xếp hạng</button>
+      </div></section>
+      <section class="mg"><h4>👥 Bạn bè và cá nhân</h4><div class="mgr">
+        <button data-a="friends" id="frb">👥 Bạn bè</button>
+        <button data-a="cos">🎨 Cá nhân hóa</button>
+      </div></section>
+      <section class="mg"><h4>💎 Cửa hàng và dịch vụ</h4><div class="mgr">
+        <button data-a="shop">🛍 Cửa hàng</button>
+        <button data-a="svc">💎 Dịch vụ VIP</button>
+        <button data-a="donate">💝 Ủng hộ</button>
+      </div></section>
+      <section class="mg"><h4>⚙ Cài đặt và trợ giúp</h4><div class="mgr">
+        <button data-a="rain" id="rainb">🌧 Bật mưa</button>
+        <button data-a="mix">🎚 Âm thanh</button>
+        <button data-a="guide">📖 Hướng dẫn</button>
+        <button data-a="leave">🚪 Rời</button>
+      </div></section>
+      <section class="mg"><h4>🛠 Quản trị</h4><div class="mgr">
+        <button data-a="orders" id="ordb" hidden>🧾 Đơn hàng</button>
+        <button data-a="dedadm" id="dedb" hidden>🎁 Lời tặng</button>
+        <button data-a="annadm" id="annb" hidden>📢 Duyệt loa</button>
+      </div></section>
     </div>
   </div>
-  <div id="chat"><div id="log"></div><input id="ci" maxlength="140" placeholder="Nhấn Enter để chat…"></div>
   <div id="bar">
-    <button data-a="emo" data-v="👋">👋 Vẫy tay</button>
-    <button data-a="emo" data-v="🥂">🥂 Nâng ly</button>
-    <button data-a="emo" data-v="❤️">❤️</button>
-    <button data-a="emo" data-v="😍" data-lv="3" hidden>😍</button>
-    <button data-a="emo" data-v="🎉" data-lv="5" hidden>🎉</button>
-    <button data-a="emo" data-v="🌸" data-lv="8" hidden>🌸</button>
-    <button data-a="emo" data-v="👑" data-lv="12" hidden>👑</button>
-    <button data-a="stg" data-v="👏">👏 Vỗ tay</button>
-    <button data-a="stg" data-v="💐">💐 Tặng hoa</button>
-    <button data-a="req">🎶 Xin bài & bình chọn</button>
-    <button data-a="ded">💌 Tặng bài hát</button>
-    <button data-a="svc">💎 Dịch vụ VIP</button>
-    <button data-a="sit">🪑 Ngồi / Đứng</button>
-    <button data-a="menu">📋 Gọi nước</button>
-    <button data-a="sip">☕ Nhấp trà</button>
-    <button data-a="friends" id="frb">👥 Bạn bè</button>
-    <button data-a="cos">🎨 Cá nhân hóa</button>
-    <button data-a="shop">🛍 Cửa hàng</button>
-    <button data-a="donate">💝 Ủng hộ</button>
-    <button data-a="orders" id="ordb" hidden>🧾 Đơn hàng</button>
-    <button data-a="dedadm" id="dedb" hidden>🎁 Lời tặng</button>
-    <button data-a="annadm" id="annb" hidden>📢 Duyệt loa</button>
-    <button data-a="checkin" id="ckb">📅 Điểm danh</button>
-    <button data-a="quest">📜 Nhiệm vụ</button>
-    <button data-a="levels">⭐ Cấp & quà</button>
-    <button data-a="skills">✨ Kỹ năng</button>
-    <button data-a="plist">🎧 Danh sách phát</button>
-    <button data-a="lineup">🗓 Lịch diễn</button>
-    <button data-a="rain" id="rainb">🌧 Bật mưa</button>
-    <button data-a="mix">🎚 Âm thanh</button>
-    <button data-a="rank">🏆 Xếp hạng</button>
-    <button data-a="guide">📖 Hướng dẫn</button>
-    <button data-a="leave">🚪 Rời</button>
+    <button class="dk" data-a="emo" data-v="👋"><b>👋</b><span>Vẫy tay</span></button>
+    <button class="dk" data-a="emo" data-v="🥂"><b>🍻</b><span>Nâng ly</span></button>
+    <button class="dk" data-a="emo" data-v="❤️"><b>❤️</b><span>Thả tim</span></button>
+    <i class="dv"></i>
+    <button class="dk ac" data-a="stg" data-v="👏"><b>👏</b><span>Vỗ tay</span></button>
+    <button class="dk ac" data-a="sit"><b>🪑</b><span>Ngồi / Đứng</span></button>
+    <button class="dk ac" data-a="menu"><b>🥤</b><span>Gọi nước</span></button>
+    <button class="dk ac" data-a="sip"><b>🍵</b><span>Nhấp trà</span></button>
   </div>
 </div>
 <div id="joy" hidden><div id="knob"></div></div>
