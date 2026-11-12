@@ -933,6 +933,8 @@
     return n;
   }
   $('nm').value = localStorage.tp_n || '';
+  let pickedC = false; // người chơi đã tự chọn màu áo / giới tính ở màn hình vào phòng
+  let pickedG = false;
   const swatch = () => {
     $('sw').innerHTML = '';
     PAL_UI[selG].forEach((c, i) => {
@@ -943,6 +945,7 @@
       }
       e.onclick = () => {
         selC = i;
+        pickedC = true;
         swatch();
       };
       $('sw').appendChild(e);
@@ -952,10 +955,12 @@
   };
   $('gm').onclick = () => {
     selG = 'm';
+    pickedG = true;
     swatch();
   };
   $('gf').onclick = () => {
     selG = 'f';
+    pickedG = true;
     swatch();
   };
   swatch();
@@ -1015,10 +1020,17 @@
         me.n = p.n || me.n;
       }
       if (mode !== 'r') {
-        me.av = selG = p.g === 'f' ? 'f' : 'm';
-        me.c = selC = +p.c || 0;
+        // phần nào chưa tự chọn ở màn hình vào phòng thì lấy giá trị đã lưu trong tài khoản
+        if (!pickedG) {
+          me.av = selG = p.g === 'f' ? 'f' : 'm';
+        }
+        if (!pickedC) {
+          const c = Math.floor(+p.c);
+          me.c = selC = c >= 0 && c < 6 ? c : 0;
+        }
         localStorage.tp_g = selG;
         localStorage.tp_c = selC;
+        swatch();
       }
     }
     hud();
